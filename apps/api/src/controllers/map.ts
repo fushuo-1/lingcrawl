@@ -1,7 +1,6 @@
 import { Response } from "express";
 import {
   mapRequestSchema,
-  RequestWithAuth,
   MapRequest,
   MapResponse,
 } from "./types";
@@ -16,31 +15,21 @@ import { isBaseDomain, extractBaseDomain } from "../../lib/url-utils";
 configDotenv();
 
 export async function mapController(
-  req: RequestWithAuth<{}, MapResponse, MapRequest>,
+  req: any,
   res: Response<MapResponse>,
 ) {
   const logger = _logger.child({
     jobId: uuidv7(),
-    teamId: req.auth.team_id,
+    teamId: "local",
     module: "api/v2",
     method: "mapController",
-    zeroDataRetention: req.acuc?.flags?.forceZDR,
   });
-  // Get timing data from middleware (includes all middleware processing time)
   const middlewareStartTime =
     (req as any).requestTiming?.startTime || new Date().getTime();
   const controllerStartTime = new Date().getTime();
 
   const originalRequest = req.body;
   req.body = mapRequestSchema.parse(req.body);
-
-  const permissions = checkPermissions(req.body, req.acuc?.flags);
-  if (permissions.error) {
-    return res.status(403).json({
-      success: false,
-      error: permissions.error,
-    });
-  }
 
   const middlewareTime = controllerStartTime - middlewareStartTime;
 
@@ -49,7 +38,7 @@ export async function mapController(
   logger.info("Map request", {
     request: req.body,
     originalRequest,
-    teamId: req.auth.team_id,
+    teamId: "local",
     mapId,
   });
 
@@ -57,12 +46,11 @@ export async function mapController(
     id: mapId,
     kind: "map",
     api_version: "v2",
-    team_id: req.auth.team_id,
+    team_id: "local",
     origin: req.body.origin ?? "api",
     integration: req.body.integration,
     target_hint: req.body.url,
-    zeroDataRetention: false, // not supported for map
-    api_key_id: req.acuc?.api_key_id ?? null,
+    zeroDataRetention: false,
   });
 
   let result: MapResult;
@@ -81,12 +69,12 @@ export async function mapController(
           sitemap: req.body.sitemap,
         },
         origin: req.body.origin,
-        teamId: req.auth.team_id,
+        teamId: "local",
         allowExternalLinks: req.body.allowExternalLinks,
         abort: abort.signal,
         mock: req.body.useMock,
         filterByPath: req.body.filterByPath !== false,
-        flags: req.acuc?.flags ?? null,
+        flags: null,
         useIndex: req.body.useIndex,
         ignoreCache: req.body.ignoreCache,
         location: req.body.location,
@@ -121,24 +109,11 @@ export async function mapController(
     }
   }
 
-  // Bill the team
-  billTeam(
-    req.auth.team_id,
-    req.acuc?.sub_id ?? undefined,
-    1,
-    req.acuc?.api_key_id ?? null,
-    { endpoint: "map", jobId: mapId },
-  ).catch(error => {
-    logger.error(
-      `Failed to bill team ${req.auth.team_id} for 1 credit: ${error}`,
-    );
-  });
-
   logMap({
     id: result.job_id,
     request_id: result.job_id,
     url: req.body.url,
-    team_id: req.auth.team_id,
+    team_id: "local",
     options: {
       search: req.body.search,
       sitemap: req.body.sitemap,
@@ -149,13 +124,12 @@ export async function mapController(
       location: req.body.location,
     },
     results: result.mapResults,
-    credits_cost: 1,
-    zeroDataRetention: false, // not supported
+    credits_cost: 0,
+    zeroDataRetention: false,
   }).catch(error => {
-    logger.error(`Failed to log job for team ${req.auth.team_id}: ${error}`);
+    logger.error(`Failed to log map job: ${error}`);
   });
 
-  // Log final timing information
   const totalRequestTime = new Date().getTime() - middlewareStartTime;
   const controllerTime = new Date().getTime() - controllerStartTime;
 
@@ -171,9 +145,7 @@ export async function mapController(
     linksCount: result.mapResults.length,
   });
 
-  // Check if we should warn about base domain
   let warning: string | undefined;
-  // Only show warning if results <= 1 AND user didn't explicitly request limit=1 AND URL is not base domain
   if (
     result.mapResults.length <= 1 &&
     req.body.limit !== 1 &&

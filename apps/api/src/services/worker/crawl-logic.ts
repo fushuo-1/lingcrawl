@@ -1,12 +1,10 @@
 import { logger as _logger } from "../../lib/logger";
-import { config } from "../../config";
 import {
   finishCrawl,
   getCrawlJobs,
   getDoneJobsOrderedLength,
 } from "../../lib/crawl-redis";
 import { getCrawl } from "../../lib/crawl-redis";
-import { supabase_service } from "../supabase";
 import { getJobs } from "../../controllers/crawl-status";
 import { logCrawl, logBatchScrape } from "../logging/log_job";
 import { createWebhookSender, WebhookEvent } from "../webhook/index";
@@ -43,10 +41,7 @@ export async function finishCrawlSuper(job: NuQJob<any>) {
     const jobs = (await getJobs(jobIDs)).sort(
       (a, b) => a.timestamp - b.timestamp,
     );
-    // const jobStatuses = await Promise.all(jobs.map((x) => x.getState()));
-    const jobStatus = sc.cancelled // || jobStatuses.some((x) => x === "failed")
-      ? "failed"
-      : "completed";
+    const jobStatus = sc.cancelled ? "failed" : "completed";
 
     const fullDocs = jobs
       .map(x =>
@@ -94,7 +89,7 @@ export async function finishCrawlSuper(job: NuQJob<any>) {
       );
     }
 
-    // v0 web hooks, call when done with all the data
+    // v0 web hooks
     if (!job.data.v1) {
       const sender = await createWebhookSender({
         teamId: job.data.team_id,
@@ -127,25 +122,6 @@ export async function finishCrawlSuper(job: NuQJob<any>) {
   } else {
     const num_docs = await getDoneJobsOrderedLength(crawlId);
 
-    let credits_billed = null;
-
-    if (config.USE_DB_AUTHENTICATION) {
-      const creditsRpc = await supabase_service.rpc(
-        "credits_billed_by_crawl_id_2",
-        {
-          i_crawl_id: crawlId,
-        },
-      );
-
-      credits_billed = creditsRpc.data?.[0]?.credits_billed ?? null;
-
-      if (credits_billed === null) {
-        logger.warn("Credits billed is null", {
-          error: creditsRpc.error,
-        });
-      }
-    }
-
     if (sc.crawlerOptions !== null) {
       await logCrawl(
         {
@@ -155,7 +131,7 @@ export async function finishCrawlSuper(job: NuQJob<any>) {
           team_id: job.data.team_id,
           options: sc.crawlerOptions,
           num_docs: num_docs,
-          credits_cost: credits_billed ?? 0,
+          credits_cost: 0,
           zeroDataRetention: sc.zeroDataRetention || job.data.zeroDataRetention,
           cancelled: sc.cancelled ?? false,
         },
@@ -168,7 +144,7 @@ export async function finishCrawlSuper(job: NuQJob<any>) {
           request_id: job.data.requestId ?? crawlId,
           team_id: job.data.team_id,
           num_docs: num_docs,
-          credits_cost: credits_billed ?? 0,
+          credits_cost: 0,
           zeroDataRetention: sc.zeroDataRetention || job.data.zeroDataRetention,
           cancelled: sc.cancelled ?? false,
         },
@@ -176,7 +152,7 @@ export async function finishCrawlSuper(job: NuQJob<any>) {
       );
     }
 
-    // v1 web hooks, call when done with no data, but with event completed
+    // v1 web hooks
     if (job.data.v1 && job.data.webhook) {
       const sender = await createWebhookSender({
         teamId: job.data.team_id,

@@ -1,15 +1,13 @@
 import { Request } from "express";
-import { supabase_rr_service, supabase_service } from "../supabase";
 import { validate as isUuid } from "uuid";
 import { logger } from "../../../src/lib/logger";
 
+// Without a database, all idempotency keys are considered valid (not duplicates).
 export async function validateIdempotencyKey(req: Request): Promise<boolean> {
   const idempotencyKey = req.headers["x-idempotency-key"];
   if (!idempotencyKey) {
-    // // not returning for missing idempotency key for now
     return true;
   }
-  // Ensure idempotencyKey is treated as a string
   const key = Array.isArray(idempotencyKey)
     ? idempotencyKey[0]
     : idempotencyKey;
@@ -17,19 +15,7 @@ export async function validateIdempotencyKey(req: Request): Promise<boolean> {
     logger.debug("Invalid idempotency key provided in the request headers.");
     return false;
   }
-
-  const { data, error } = await supabase_rr_service
-    .from("idempotency_keys")
-    .select("key")
-    .eq("key", idempotencyKey);
-
-  if (error) {
-    logger.error(`Error validating idempotency key: ${error}`);
-  }
-
-  if (!data || data.length === 0) {
-    return true;
-  }
-
-  return false;
+  // Without a database, we cannot check for duplicates.
+  // Always return true (valid = not a duplicate).
+  return true;
 }

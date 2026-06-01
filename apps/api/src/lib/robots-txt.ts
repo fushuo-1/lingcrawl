@@ -4,14 +4,8 @@ import { Logger } from "winston";
 import { ScrapeOptions, scrapeOptions } from "../controllers/types";
 import { scrapeURL } from "../scraper/scrapeURL";
 import { Engine } from "../scraper/scrapeURL/engines";
-import { CostTracking } from "./cost-tracking";
-import { useIndex } from "../services";
 
 const ROBOTS_MAX_AGE = 1 * 24 * 60 * 60 * 1000;
-
-const useFireEngine =
-  config.FIRE_ENGINE_BETA_URL !== "" &&
-  config.FIRE_ENGINE_BETA_URL !== undefined;
 
 interface RobotsTxtChecker {
   robotsTxtUrl: string;
@@ -36,30 +30,7 @@ export async function fetchRobotsTxt(
   const urlObj = new URL(url);
   const robotsTxtUrl = `${urlObj.protocol}//${urlObj.host}/robots.txt`;
 
-  const shouldPrioritizeFireEngine = location && useFireEngine;
-
-  const forceEngine: Engine[] = [
-    ...(useIndex ? ["index" as const] : []),
-    ...(shouldPrioritizeFireEngine
-      ? [
-          "fire-engine;tlsclient" as const,
-          "fire-engine;tlsclient;stealth" as const,
-          // final fallback to chrome-cdp to fill the index
-          "fire-engine;chrome-cdp" as const,
-          "fire-engine;chrome-cdp;stealth" as const,
-        ]
-      : []),
-    "fetch",
-    ...(!shouldPrioritizeFireEngine && useFireEngine
-      ? [
-          "fire-engine;tlsclient" as const,
-          "fire-engine;tlsclient;stealth" as const,
-          // final fallback to chrome-cdp to fill the index
-          "fire-engine;chrome-cdp" as const,
-          "fire-engine;chrome-cdp;stealth" as const,
-        ]
-      : []),
-  ];
+  const forceEngine: Engine[] = ["fetch"];
 
   let content: string = "";
   const response = await scrapeURL(
@@ -86,7 +57,7 @@ export async function fetchRobotsTxt(
       teamId: "robots-txt",
       zeroDataRetention,
     },
-    new CostTracking(),
+    null as any,
   );
 
   if (
@@ -97,7 +68,7 @@ export async function fetchRobotsTxt(
     content = response.document.rawHtml!;
   } else {
     if (response.success && response.document.metadata.statusCode === 404) {
-      logger.warn("Robots.txt not found", { robotsTxtUrl }); // should probably index 404 robots.txt
+      logger.warn("Robots.txt not found", { robotsTxtUrl });
       return { content: "", url: robotsTxtUrl };
     }
 
@@ -111,7 +82,6 @@ export async function fetchRobotsTxt(
     return { content: "", url: robotsTxtUrl };
   }
 
-  // return URL in case we've been redirected
   return {
     content: content,
     url: response.document.metadata.url || robotsTxtUrl,
@@ -142,7 +112,6 @@ export function isUrlAllowedByRobots(
   for (const userAgent of userAgents) {
     let isAllowed = robots.isAllowed(url, userAgent);
 
-    // Handle null/undefined responses - default to true (allowed)
     if (isAllowed === null || isAllowed === undefined) {
       isAllowed = true;
     }
@@ -151,8 +120,6 @@ export function isUrlAllowedByRobots(
       isAllowed = true;
     }
 
-    // Also check with trailing slash if URL doesn't have one
-    // This catches cases like "Disallow: /path/" when user requests "/path"
     if (isAllowed && !url.endsWith("/")) {
       const urlWithSlash = url + "/";
       let isAllowedWithSlash = robots.isAllowed(urlWithSlash, userAgent);
@@ -161,14 +128,12 @@ export function isUrlAllowedByRobots(
         isAllowedWithSlash = true;
       }
 
-      // If the trailing slash version is explicitly disallowed, block it
       if (isAllowedWithSlash === false) {
         isAllowed = false;
       }
     }
 
     if (isAllowed) {
-      //   console.log("isAllowed: true, " + userAgent);
       return true;
     }
   }

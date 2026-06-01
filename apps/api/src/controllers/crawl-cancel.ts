@@ -3,23 +3,17 @@ import { logger } from "../../lib/logger";
 import { getCrawl, saveCrawl } from "../../lib/crawl-redis";
 import * as Sentry from "@sentry/node";
 import { configDotenv } from "dotenv";
-import { RequestWithAuth } from "./types";
 import { crawlGroup } from "../../services/worker/nuq";
 configDotenv();
 
 export async function crawlCancelController(
-  req: RequestWithAuth<{ jobId: string }>,
+  req: any,
   res: Response,
 ) {
   try {
     const sc = await getCrawl(req.params.jobId);
     if (!sc) {
       return res.status(404).json({ error: "Job not found" });
-    }
-
-    // check if the job belongs to the team
-    if (sc.team_id !== req.auth.team_id) {
-      return res.status(403).json({ error: "Unauthorized" });
     }
 
     const group = await crawlGroup.getGroup(req.params.jobId);

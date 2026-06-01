@@ -5,7 +5,8 @@ import {
   Document as V2Document,
   TeamFlags,
 } from "./controllers/types";
-import { AuthCreditUsageChunk } from "./controllers/v1/types";
+// AuthCreditUsageChunk stub (v1 removed)
+type AuthCreditUsageChunk = any;
 import { ExtractorOptions, Document } from "./lib/entities";
 import { InternalOptions } from "./scraper/scrapeURL";
 import { SerializedTraceContext } from "./lib/otel-tracer";

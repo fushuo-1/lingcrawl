@@ -1,4 +1,5 @@
-import type { Action } from "../controllers/v1/types";
+// Action stub (v1 removed)
+type Action = any;
 import type { BrandingProfile } from "../types/branding";
 
 export type PageOptions = {

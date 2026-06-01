@@ -1,34 +1,7 @@
-// This file is an exception to the "no supabase in scrapeURL" rule,
-// and it makes me sad. - mogery
-
-import { config } from "../../../config";
 import { Meta } from "..";
 import { Document } from "../../../controllers/types-shared";
 
+// No-op: screenshots are kept as data URLs in self-hosted mode
 export function uploadScreenshot(meta: Meta, document: Document): Document {
-  if (
-    config.USE_DB_AUTHENTICATION &&
-    document.screenshot !== undefined &&
-    document.screenshot.startsWith("data:")
-  ) {
-    meta.logger.debug("Uploading screenshot to Supabase...");
-
-    const fileName = `screenshot-${crypto.randomUUID()}.png`;
-
-    supabase_service.storage
-      .from("media")
-      .upload(
-        fileName,
-        Buffer.from(document.screenshot.split(",")[1], "base64"),
-        {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: document.screenshot.split(":")[1].split(";")[0],
-        },
-      );
-
-    document.screenshot = `https://service.lingcrawl.dev/storage/v1/object/public/media/${encodeURIComponent(fileName)}`;
-  }
-
   return document;
 }

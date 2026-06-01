@@ -1,7 +1,6 @@
 import { Response } from "express";
 import { config } from "../../config";
 import {
-  RequestWithAuth,
   SearchRequest,
   SearchResponse,
   searchRequestSchema,
@@ -12,13 +11,10 @@ import { logger as _logger } from "../../lib/logger";
 import { ScrapeJobTimeoutError } from "../../lib/error";
 import { z } from "zod";
 import { CategoryOption } from "../../lib/search-query-builder";
-import {
-  applyZdrScope,
-  captureExceptionWithZdrCheck,
 import { executeSearch } from "../../search/execute";
 
 export async function searchController(
-  req: RequestWithAuth<{}, SearchResponse, SearchRequest>,
+  req: any,
   res: Response<SearchResponse>,
 ) {
   const middlewareStartTime =
@@ -28,19 +24,10 @@ export async function searchController(
   const jobId = uuidv7();
   let logger = _logger.child({
     jobId,
-    teamId: req.auth.team_id,
+    teamId: "local",
     module: "api/v2",
     method: "searchController",
-    zeroDataRetention: req.acuc?.flags?.forceZDR,
   });
-
-  if (req.acuc?.flags?.forceZDR) {
-    return res.status(400).json({
-      success: false,
-      error:
-        "Your team has zero data retention enabled. This is not supported on search. Please contact support@lingcrawl.com to unblock this feature.",
-    });
-  }
 
   const middlewareTime = controllerStartTime - middlewareStartTime;
   const isSearchPreview =
@@ -52,53 +39,22 @@ export async function searchController(
   try {
     req.body = searchRequestSchema.parse(req.body);
 
-    if (
-      req.body.__agentInterop &&
-      config.AGENT_INTEROP_SECRET &&
-      req.body.__agentInterop.auth !== config.AGENT_INTEROP_SECRET
-    ) {
-      return res.status(403).json({
-        success: false,
-        error: "Invalid agent interop.",
-      });
-    } else if (req.body.__agentInterop && !config.AGENT_INTEROP_SECRET) {
-      return res.status(403).json({
-        success: false,
-        error: "Agent interop is not enabled.",
-      });
-    }
-
-    const shouldBill = req.body.__agentInterop?.shouldBill ?? true;
-    const agentRequestId = req.body.__agentInterop?.requestId ?? null;
-    const billing: BillingMetadata = req.body.__agentInterop
-      ? { endpoint: "agent" as const, jobId }
-      : { endpoint: "search" as const, jobId };
-
     logger = logger.child({
       version: "v2",
       query: req.body.query,
       origin: req.body.origin,
     });
 
-    const isZDR = req.body.enterprise?.includes("zdr");
-    const isAnon = req.body.enterprise?.includes("anon");
-    const isZDROrAnon = isZDR || isAnon;
-    zeroDataRetention = isZDROrAnon ?? false;
-    applyZdrScope(isZDROrAnon ?? false);
-
-    if (!agentRequestId) {
-      await logRequest({
-        id: jobId,
-        kind: "search",
-        api_version: "v2",
-        team_id: req.auth.team_id,
-        origin: req.body.origin ?? "api",
-        integration: req.body.integration,
-        target_hint: req.body.query,
-        zeroDataRetention: isZDROrAnon ?? false,
-        api_key_id: req.acuc?.api_key_id ?? null,
-      });
-    }
+    await logRequest({
+      id: jobId,
+      kind: "search",
+      api_version: "v2",
+      team_id: "local",
+      origin: req.body.origin ?? "api",
+      integration: req.body.integration,
+      target_hint: req.body.query,
+      zeroDataRetention: false,
+    });
 
     const result = await executeSearch(
       {
@@ -116,32 +72,17 @@ export async function searchController(
         timeout: req.body.timeout,
       },
       {
-        teamId: req.auth.team_id,
+        teamId: "local",
         origin: req.body.origin,
-        apiKeyId: req.acuc?.api_key_id ?? null,
-        flags: req.acuc?.flags ?? null,
-        requestId: agentRequestId ?? jobId,
-        bypassBilling: !shouldBill,
-        zeroDataRetention: isZDROrAnon,
-        billing,
+        apiKeyId: null,
+        flags: null,
+        requestId: jobId,
+        bypassBilling: true,
+        zeroDataRetention: false,
+        billing: { endpoint: "search" as const, jobId },
       },
       logger,
     );
-
-    // Bill team for search credits only (scrape jobs bill themselves)
-    if (!isSearchPreview && shouldBill) {
-      billTeam(
-        req.auth.team_id,
-        req.acuc?.sub_id ?? undefined,
-        result.searchCredits,
-        req.acuc?.api_key_id ?? null,
-        billing,
-      ).catch(error =>
-        logger.error(
-          `Failed to bill team ${req.acuc?.sub_id} for ${result.searchCredits} credits: ${error}`,
-        ),
-      );
-    }
 
     const endTime = new Date().getTime();
     const timeTakenInSeconds = (endTime - middlewareStartTime) / 1000;
@@ -149,17 +90,17 @@ export async function searchController(
     logSearch(
       {
         id: jobId,
-        request_id: agentRequestId ?? jobId,
+        request_id: jobId,
         query: req.body.query,
         is_successful: true,
         error: undefined,
         results: result.response as any,
         num_results: result.totalResultsCount,
         time_taken: timeTakenInSeconds,
-        team_id: req.auth.team_id,
+        team_id: "local",
         options: req.body,
-        credits_cost: shouldBill ? result.searchCredits : 0,
-        zeroDataRetention: isZDROrAnon ?? false,
+        credits_cost: 0,
+        zeroDataRetention: false,
       },
       false,
     );
@@ -206,9 +147,6 @@ export async function searchController(
       });
     }
 
-    captureExceptionWithZdrCheck(error, {
-      extra: { zeroDataRetention },
-    });
     logger.error("Unhandled error occurred in search", {
       version: "v2",
       error,

@@ -6,7 +6,6 @@ import {
   batchScrapeRequestSchema,
   batchScrapeRequestSchemaNoURLValidation,
   URL as urlSchema,
-  RequestWithAuth,
   ScrapeOptions,
   BatchScrapeResponse,
 } from "./types";
@@ -26,9 +25,10 @@ import { UNSUPPORTED_SITE_MESSAGE } from "../../lib/strings";
 import { isUrlBlocked } from "../../scraper/WebScraper/utils/blocklist";
 import { crawlGroup } from "../../services/worker/nuq";
 import { logRequest } from "../../services/logging/log_job";
+import { createWebhookSender, WebhookEvent } from "../../services/webhook/index";
 
 export async function batchScrapeController(
-  req: RequestWithAuth<{}, BatchScrapeResponse, BatchScrapeRequest>,
+  req: any,
   res: Response<BatchScrapeResponse>,
 ) {
   const preNormalizedBody = { ...req.body };
@@ -38,43 +38,15 @@ export async function batchScrapeController(
     req.body = batchScrapeRequestSchema.parse(req.body);
   }
 
-  const permissions = checkPermissions(req.body, req.acuc?.flags);
-  if (permissions.error) {
-    return res.status(403).json({
-      success: false,
-      error: permissions.error,
-    });
-  }
-
-  const zeroDataRetention =
-    req.acuc?.flags?.forceZDR || (req.body.zeroDataRetention ?? false);
-
-  if (
-    req.body.__agentInterop &&
-    config.AGENT_INTEROP_SECRET &&
-    req.body.__agentInterop.auth !== config.AGENT_INTEROP_SECRET
-  ) {
-    return res.status(403).json({
-      success: false,
-      error: "Invalid agent interop.",
-    });
-  } else if (req.body.__agentInterop && !config.AGENT_INTEROP_SECRET) {
-    return res.status(403).json({
-      success: false,
-      error: "Agent interop is not enabled.",
-    });
-  }
+  const zeroDataRetention = req.body.zeroDataRetention ?? false;
 
   const id = req.body.appendToId ?? uuidv7();
-  const billing: BillingMetadata = req.body.__agentInterop
-    ? { endpoint: "agent" as const, jobId: id }
-    : { endpoint: "batch_scrape" as const, jobId: id };
   const logger = _logger.child({
     crawlId: id,
     batchScrapeId: id,
     module: "api/v2",
     method: "batchScrapeController",
-    teamId: req.auth.team_id,
+    teamId: "local",
     zeroDataRetention,
   });
 
@@ -91,7 +63,7 @@ export async function batchScrapeController(
     for (const u of pendingURLs) {
       try {
         const nu = urlSchema.parse(u);
-        if (!isUrlBlocked(nu, req.acuc?.flags ?? null)) {
+        if (!isUrlBlocked(nu, null)) {
           urls.push(nu);
           unnormalizedURLs.push(u);
         } else {
@@ -104,7 +76,7 @@ export async function batchScrapeController(
   } else {
     if (
       req.body.urls?.some((url: string) =>
-        isUrlBlocked(url, req.acuc?.flags ?? null),
+        isUrlBlocked(url, null),
       )
     ) {
       if (!res.headersSent) {
@@ -126,20 +98,18 @@ export async function batchScrapeController(
   logger.debug("Batch scrape " + id + " starting", {
     urlsLength: urls.length,
     appendToId: req.body.appendToId,
-    account: req.account,
   });
 
-  if (!req.body.appendToId && !req.body.__agentInterop) {
+  if (!req.body.appendToId) {
     await logRequest({
       id,
       kind: "batch_scrape",
       api_version: "v2",
-      team_id: req.auth.team_id,
+      team_id: "local",
       origin: req.body.origin ?? "api",
       integration: req.body.integration,
       target_hint: urls[0] ?? "",
       zeroDataRetention: zeroDataRetention || false,
-      api_key_id: req.acuc?.api_key_id ?? null,
     });
   }
 
@@ -150,21 +120,21 @@ export async function batchScrapeController(
         scrapeOptions: req.body,
         internalOptions: {
           disableSmartWaitCache: true,
-          teamId: req.auth.team_id,
+          teamId: "local",
           saveScrapeResultToGCS: config.GCS_FIRE_ENGINE_BUCKET_NAME
             ? true
             : false,
           zeroDataRetention,
-          bypassBilling: !(req.body.__agentInterop?.shouldBill ?? true),
-        }, // NOTE: smart wait disabled for batch scrapes to ensure contentful scrape, speed does not matter
-        team_id: req.auth.team_id,
+          bypassBilling: true,
+        },
+        team_id: "local",
         createdAt: Date.now(),
         maxConcurrency: req.body.maxConcurrency,
         zeroDataRetention,
       };
 
   if (req.body.appendToId) {
-    if (!sc || sc.team_id !== req.auth.team_id) {
+    if (!sc || sc.team_id !== "local") {
       return res.status(404).json({
         success: false,
         error: "Job not found",
@@ -176,7 +146,7 @@ export async function batchScrapeController(
     await crawlGroup.addGroup(
       id,
       sc.team_id,
-      (req.acuc?.flags?.crawlTtlHours ?? 24) * 60 * 60 * 1000,
+      24 * 60 * 60 * 1000,
     );
     await saveCrawl(id, sc);
     await markCrawlActive(id);
@@ -184,12 +154,9 @@ export async function batchScrapeController(
 
   let jobPriority = 20;
 
-  // If it is over 1000, we need to get the job priority,
-  // otherwise we can use the default priority of 20
   if (urls.length > 1000) {
-    // set base to 21
     jobPriority = await getJobPriority({
-      team_id: req.auth.team_id,
+      team_id: "local",
       basePriority: 21,
     });
   }
@@ -204,21 +171,19 @@ export async function batchScrapeController(
     data: {
       url: x,
       mode: "single_urls" as const,
-      team_id: req.auth.team_id,
+      team_id: "local",
       crawlerOptions: null,
       scrapeOptions,
       origin: "api",
       integration: req.body.integration,
-      billing,
+      billing: { endpoint: "batch_scrape" as const, jobId: id },
       crawl_id: id,
-      requestId: req.body.__agentInterop?.requestId ?? undefined,
-      bypassBilling: !(req.body.__agentInterop?.shouldBill ?? true),
+      bypassBilling: true,
       sitemapped: true,
       v1: true,
       webhook: req.body.webhook,
       internalOptions: sc.internalOptions,
       zeroDataRetention,
-      apiKeyId: req.acuc?.api_key_id ?? null,
     },
     priority: jobPriority,
   }));
@@ -246,7 +211,7 @@ export async function batchScrapeController(
       webhook: req.body.webhook,
     });
     const sender = await createWebhookSender({
-      teamId: req.auth.team_id,
+      teamId: "local",
       jobId: id,
       webhook: req.body.webhook,
       v0: false,

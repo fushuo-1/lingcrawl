@@ -5,7 +5,6 @@ import {
   CrawlRequest,
   crawlRequestSchema,
   CrawlResponse,
-  RequestWithAuth,
   toV0CrawlerOptions,
 } from "./types";
 import {
@@ -16,61 +15,40 @@ import {
 } from "../../lib/crawl-redis";
 import { _addScrapeJobToBullMQ } from "../../services/queue-jobs";
 import { logger as _logger } from "../../lib/logger";
-import { generateCrawlerOptionsFromPrompt } from "../../scraper/scrapeURL/transformers/llmExtract";
-import { buildPromptWithWebsiteStructure } from "../../lib/map-utils";
 import { crawlGroup } from "../../services/worker/nuq";
 import { logRequest } from "../../services/logging/log_job";
 
 export async function crawlController(
-  req: RequestWithAuth<{}, CrawlResponse, CrawlRequest>,
+  req: any,
   res: Response<CrawlResponse>,
 ) {
-  const preNormalizedBody = req.body;
   req.body = crawlRequestSchema.parse(req.body);
 
-  const permissions = checkPermissions(req.body, req.acuc?.flags);
-  if (permissions.error) {
-    return res.status(403).json({
-      success: false,
-      error: permissions.error,
-    });
-  }
-
-  const zeroDataRetention =
-    req.acuc?.flags?.forceZDR || req.body.zeroDataRetention;
+  const zeroDataRetention = req.body.zeroDataRetention ?? false;
 
   const id = uuidv7();
   const logger = _logger.child({
     crawlId: id,
     module: "api/v2",
     method: "crawlController",
-    teamId: req.auth.team_id,
+    teamId: "local",
     zeroDataRetention,
   });
 
   logger.debug("Crawl " + id + " starting", {
     request: req.body,
-    originalRequest: preNormalizedBody,
-    account: req.account,
   });
 
   await logRequest({
     id,
     kind: "crawl",
     api_version: "v2",
-    team_id: req.auth.team_id,
+    team_id: "local",
     origin: req.body.origin ?? "api",
     integration: req.body.integration,
     target_hint: req.body.url,
     zeroDataRetention: zeroDataRetention || false,
-    api_key_id: req.acuc?.api_key_id ?? null,
   });
-
-  let { remainingCredits } = req.account!;
-  const useDbAuthentication = config.USE_DB_AUTHENTICATION;
-  if (!useDbAuthentication) {
-    remainingCredits = Infinity;
-  }
 
   const crawlerOptions = {
     ...req.body,
@@ -80,70 +58,8 @@ export async function crawlController(
   };
   const scrapeOptions = req.body.scrapeOptions;
 
-  let promptGeneratedOptions = {};
-  if (req.body.prompt) {
-    try {
-      // Enhance prompt with discovered site URLs (up to 120) to improve option generation
-      const { prompt: enhancedPrompt } = await buildPromptWithWebsiteStructure({
-        basePrompt: req.body.prompt,
-        url: req.body.url,
-        teamId: req.auth.team_id,
-        flags: req.acuc?.flags ?? null,
-        logger,
-        limit: 50,
-        includeSubdomains: false,
-        allowExternalLinks: false,
-        useIndex: true,
-        maxFireEngineResults: 500,
-      });
-      const costTracking = new CostTracking();
-      const { extract } = await generateCrawlerOptionsFromPrompt(
-        enhancedPrompt,
-        logger,
-        costTracking,
-        { teamId: req.auth.team_id, crawlId: id },
-      );
-      promptGeneratedOptions = extract || {};
-      logger.debug("Generated crawler options from prompt", {
-        prompt: req.body.prompt,
-        generatedOptions: promptGeneratedOptions,
-      });
-      logger.debug(JSON.stringify(promptGeneratedOptions, null, 2));
-    } catch (error) {
-      logger.error("Failed to generate crawler options from prompt", {
-        error: error.message,
-        prompt: req.body.prompt,
-      });
-      return res.status(400).json({
-        success: false,
-        error:
-          "Failed to process natural language prompt. Please try rephrasing or use explicit crawler options.",
-      });
-    }
-  }
-
-  // Merge behavior:
-  // - Start with parsed crawlerOptions (which contains schema defaults)
-  // - Overlay promptGeneratedOptions ONLY for fields the user did not explicitly provide
-  //   in the original request (preNormalizedBody) or provided as null/undefined.
-  // This prevents empty defaults like [] from overwriting meaningful prompt-generated values.
-  const finalCrawlerOptions: any = { ...crawlerOptions };
-  for (const [key, value] of Object.entries(promptGeneratedOptions)) {
-    const userProvided = Object.prototype.hasOwnProperty.call(
-      preNormalizedBody,
-      key,
-    );
-    if (
-      !userProvided ||
-      preNormalizedBody[key] === undefined ||
-      preNormalizedBody[key] === null
-    ) {
-      finalCrawlerOptions[key] = value;
-    }
-  }
-
-  if (Array.isArray(finalCrawlerOptions.includePaths)) {
-    for (const x of finalCrawlerOptions.includePaths) {
+  if (Array.isArray(crawlerOptions.includePaths)) {
+    for (const x of crawlerOptions.includePaths) {
       try {
         new RegExp(x);
       } catch (e) {
@@ -152,8 +68,8 @@ export async function crawlController(
     }
   }
 
-  if (Array.isArray(finalCrawlerOptions.excludePaths)) {
-    for (const x of finalCrawlerOptions.excludePaths) {
+  if (Array.isArray(crawlerOptions.excludePaths)) {
+    for (const x of crawlerOptions.excludePaths) {
       try {
         new RegExp(x);
       } catch (e) {
@@ -161,47 +77,27 @@ export async function crawlController(
       }
     }
   }
-
-  const originalLimit = finalCrawlerOptions.limit;
-  finalCrawlerOptions.limit = Math.min(
-    remainingCredits,
-    finalCrawlerOptions.limit,
-  );
-  logger.debug("Determined limit: " + finalCrawlerOptions.limit, {
-    remainingCredits,
-    bodyLimit: originalLimit,
-    originalBodyLimit: preNormalizedBody.limit,
-  });
 
   const sc: StoredCrawl = {
     originUrl: req.body.url,
-    crawlerOptions: toV0CrawlerOptions(finalCrawlerOptions),
+    crawlerOptions: toV0CrawlerOptions(crawlerOptions),
     scrapeOptions,
     internalOptions: {
       disableSmartWaitCache: true,
-      teamId: req.auth.team_id,
+      teamId: "local",
       saveScrapeResultToGCS: config.GCS_FIRE_ENGINE_BUCKET_NAME ? true : false,
       zeroDataRetention,
     },
-    team_id: req.auth.team_id,
+    team_id: "local",
     createdAt: Date.now(),
-    maxConcurrency:
-      req.body.maxConcurrency !== undefined
-        ? req.acuc?.concurrency !== undefined
-          ? Math.min(req.body.maxConcurrency, req.acuc.concurrency)
-          : req.body.maxConcurrency
-        : undefined,
+    maxConcurrency: req.body.maxConcurrency,
     zeroDataRetention,
   };
 
-  const crawler = crawlToCrawler(id, sc, req.acuc?.flags ?? null);
+  const crawler = crawlToCrawler(id, sc, null);
 
   try {
     sc.robots = await crawler.getRobotsTxt(scrapeOptions.skipTlsVerification);
-    // const robotsCrawlDelay = crawler.getRobotsCrawlDelay();
-    // if (robotsCrawlDelay !== null && !sc.crawlerOptions.delay) {
-    //   sc.crawlerOptions.delay = robotsCrawlDelay;
-    // }
   } catch (e) {
     logger.debug("Failed to get robots.txt (this is probably fine!)", {
       error: e,
@@ -211,7 +107,7 @@ export async function crawlController(
   await crawlGroup.addGroup(
     id,
     sc.team_id,
-    (req.acuc?.flags?.crawlTtlHours ?? 24) * 60 * 60 * 1000,
+    24 * 60 * 60 * 1000,
   );
 
   await saveCrawl(id, sc);
@@ -222,8 +118,8 @@ export async function crawlController(
     {
       url: req.body.url,
       mode: "kickoff" as const,
-      team_id: req.auth.team_id,
-      crawlerOptions: finalCrawlerOptions,
+      team_id: "local",
+      crawlerOptions,
       scrapeOptions: sc.scrapeOptions,
       internalOptions: sc.internalOptions,
       origin: req.body.origin,
@@ -233,7 +129,6 @@ export async function crawlController(
       webhook: req.body.webhook,
       v1: true,
       zeroDataRetention: zeroDataRetention || false,
-      apiKeyId: req.acuc?.api_key_id ?? null,
     },
     uuidv7(),
   );
@@ -244,9 +139,5 @@ export async function crawlController(
     success: true,
     id,
     url: `${protocol}://${req.get("host")}/crawl/${id}`,
-    ...(req.body.prompt && {
-      promptGeneratedOptions: promptGeneratedOptions,
-      finalCrawlerOptions: finalCrawlerOptions,
-    }),
   });
 }

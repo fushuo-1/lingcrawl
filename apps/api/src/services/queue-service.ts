@@ -2,10 +2,7 @@ import { Queue } from "bullmq";
 import { config } from "../config";
 import { logger } from "../lib/logger";
 import IORedis from "ioredis";
-import { addExtractJob, ExtractJobData } from "./extract-queue";
 
-let loggingQueue: Queue;
-let indexQueue: Queue;
 let billingQueue: Queue;
 let precrawlQueue: Queue;
 let redisConnection: IORedis;
@@ -25,23 +22,16 @@ export function getRedisConnection(): IORedis {
 const billingQueueName = "{billingQueue}";
 export const precrawlQueueName = "{precrawlQueue}";
 
-export async function addExtractJobToQueue(
-  extractId: string,
-  data: ExtractJobData,
-): Promise<void> {
-  await addExtractJob(extractId, data);
-}
-
 export function getBillingQueue() {
   if (!billingQueue) {
     billingQueue = new Queue(billingQueueName, {
       connection: getRedisConnection(),
       defaultJobOptions: {
         removeOnComplete: {
-          age: 60, // 1 minute
+          age: 60,
         },
         removeOnFail: {
-          age: 3600, // 1 hour
+          age: 3600,
         },
       },
     });
@@ -55,10 +45,10 @@ export function getPrecrawlQueue() {
       connection: getRedisConnection(),
       defaultJobOptions: {
         removeOnComplete: {
-          age: 24 * 60 * 60, // 1 day
+          age: 24 * 60 * 60,
         },
         removeOnFail: {
-          age: 24 * 60 * 60, // 1 day
+          age: 24 * 60 * 60,
         },
       },
     });

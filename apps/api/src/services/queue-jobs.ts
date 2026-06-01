@@ -17,7 +17,7 @@ import { sendNotificationWithCustomDays } from "./notification/email_notificatio
 import { shouldSendConcurrencyLimitNotification } from "./notification/notification-check";
 import { getACUCTeam } from "../controllers/auth";
 import { getJobFromGCS, removeJobFromGCS } from "../lib/gcs-jobs";
-import { Document } from "../controllers/v1/types";
+import { Document } from "../controllers/types";
 import { getCrawl } from "../lib/crawl-redis";
 import { Logger } from "winston";
 import { ScrapeJobTimeoutError, TransportableError } from "../lib/error";
