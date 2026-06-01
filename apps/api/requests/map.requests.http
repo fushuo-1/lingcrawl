@@ -1,0 +1,30 @@
+# Pick your baseUrl here:
+@baseUrl = http://localhost:3002
+# @baseUrl = https://api.lingcrawl.dev
+
+
+### Crawl
+# @name crawl
+POST {{baseUrl}}/v2/map HTTP/1.1
+Authorization: Bearer {{$dotenv TEST_API_KEY}}
+content-type: application/json
+
+{
+  "url": "https://lingcrawl.dev",
+  "limit": 2
+}
+
+# {
+#     "web": [
+#         {
+#             "url": "https://lingcrawl.dev",
+#             "title": "LingCrawl",
+#             "description": "LingCrawl is a platform for crawling and mapping websites."
+#         },
+#         {
+#             "url": "https://lingcrawl.dev/blog",
+#             "title": "LingCrawl Blog",
+#             "description": "LingCrawl Blog is a blog about LingCrawl."
+#         }
+#     ]
+# }
