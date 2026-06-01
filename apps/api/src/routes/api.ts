@@ -7,10 +7,13 @@ import { crawlController } from "../controllers/crawl";
 import { crawlStatusController } from "../controllers/crawl-status";
 import { mapController } from "../controllers/map";
 import { crawlErrorsController } from "../controllers/crawl-errors";
-import { ongoingCrawlsController } from "../controllers/crawl-ongoing";
 import { scrapeStatusController } from "../controllers/scrape-status";
 import { crawlCancelController } from "../controllers/crawl-cancel";
 import { crawlStatusWSController } from "../controllers/crawl-status-ws";
+import { githubReadController } from "../controllers/github-read";
+import { linksController } from "../controllers/links";
+import { extractController } from "../controllers/extract";
+import { summaryController } from "../controllers/summary";
 import {
   blocklistMiddleware,
   idempotencyMiddleware,
@@ -44,8 +47,6 @@ apiRouter.post("/map", blocklistMiddleware, wrap(mapController));
 
 // Crawl
 apiRouter.post("/crawl", blocklistMiddleware, idempotencyMiddleware, wrap(crawlController));
-apiRouter.get("/crawl/ongoing", wrap(ongoingCrawlsController));
-apiRouter.get("/crawl/active", wrap(ongoingCrawlsController));
 apiRouter.get("/crawl/:jobId", validateJobIdParam, wrap(crawlStatusController));
 apiRouter.delete("/crawl/:jobId", validateJobIdParam, wrap(crawlCancelController));
 apiRouter.ws(
@@ -60,3 +61,15 @@ apiRouter.ws(
   crawlStatusWSController,
 );
 apiRouter.get("/crawl/:jobId/errors", validateJobIdParam, wrap(crawlErrorsController));
+
+// GitHub Read
+apiRouter.post("/github/read", wrap(githubReadController));
+
+// Links
+apiRouter.post("/links", wrap(linksController));
+
+// Extract (dual mode: fulltext or LLM)
+apiRouter.post("/extract", wrap(extractController));
+
+// Summary (requires LLM)
+apiRouter.post("/summary", wrap(summaryController));
