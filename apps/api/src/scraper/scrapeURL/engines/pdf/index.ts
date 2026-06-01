@@ -27,7 +27,6 @@ import { emitNativeLogs, extractAndEmitNativeLogs } from "../../../../lib/native
 import { withSpan, setSpanAttributes } from "../../../../lib/otel-tracer";
 import { scrapePDFWithRunPodMU } from "./runpodMU";
 import { scrapePDFWithParsePDF } from "./pdfParse";
-import { captureExceptionWithZdrCheck } from "../../../../services/sentry";
 import { isPdfBuffer, PDF_SNIFF_WINDOW } from "./pdfUtils";
 import { comparePdfOutputs } from "./shadowComparison";
 

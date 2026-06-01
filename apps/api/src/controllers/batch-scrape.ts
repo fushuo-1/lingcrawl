@@ -21,14 +21,11 @@ import {
 } from "../../lib/crawl-redis";
 import { getJobPriority } from "../../lib/job-priority";
 import { addScrapeJobs } from "../../services/queue-jobs";
-import { createWebhookSender, WebhookEvent } from "../../services/webhook";
 import { logger as _logger } from "../../lib/logger";
 import { UNSUPPORTED_SITE_MESSAGE } from "../../lib/strings";
 import { isUrlBlocked } from "../../scraper/WebScraper/utils/blocklist";
-import { checkPermissions } from "../../lib/permissions";
 import { crawlGroup } from "../../services/worker/nuq";
 import { logRequest } from "../../services/logging/log_job";
-import type { BillingMetadata } from "../../services/billing/types";
 
 export async function batchScrapeController(
   req: RequestWithAuth<{}, BatchScrapeResponse, BatchScrapeRequest>,

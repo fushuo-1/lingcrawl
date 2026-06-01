@@ -3,7 +3,6 @@ import { logger as _logger } from "../lib/logger";
 import { configDotenv } from "dotenv";
 import { scrapeURL, ScrapeUrlResponse } from "../scraper/scrapeURL";
 import type { NuQJob } from "../services/worker/nuq";
-import { CostTracking } from "../lib/cost-tracking";
 configDotenv();
 
 export async function startWebScraperPipeline({

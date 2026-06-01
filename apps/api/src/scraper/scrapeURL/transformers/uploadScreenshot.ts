@@ -1,7 +1,6 @@
 // This file is an exception to the "no supabase in scrapeURL" rule,
 // and it makes me sad. - mogery
 
-import { supabase_service } from "../../../services/supabase";
 import { config } from "../../../config";
 import { Meta } from "..";
 import { Document } from "../../../controllers/types-shared";

@@ -15,7 +15,6 @@ import Ajv from "ajv";
 import { ErrorCodes } from "../../lib/error";
 import { integrationSchema } from "../../utils/integration";
 import { includesFormat } from "../../lib/format-utils";
-import { webhookSchema } from "../../services/webhook/schema";
 import { BrandingProfile } from "../../types/branding";
 
 type Format =

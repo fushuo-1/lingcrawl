@@ -19,7 +19,6 @@ import { integrationSchema } from "../../utils/integration";
 import {
   webhookSchema,
   createWebhookSchema,
-} from "../../services/webhook/schema";
 import { BrandingProfile } from "../../types/branding";
 
 // Base URL schema with common validation logic

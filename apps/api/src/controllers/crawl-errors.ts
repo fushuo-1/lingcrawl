@@ -8,7 +8,6 @@ import {
 import { getCrawl, getCrawlJobs } from "../../lib/crawl-redis";
 import { redisEvictConnection } from "../../../src/services/redis";
 import { configDotenv } from "dotenv";
-import { supabase_rr_service } from "../../services/supabase";
 import { logger as _logger } from "../../lib/logger";
 import { deserializeTransportableError } from "../../lib/error-serde";
 import { TransportableError } from "../../lib/error";

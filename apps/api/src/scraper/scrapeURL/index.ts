@@ -2,7 +2,6 @@ import { Logger } from "winston";
 import { config } from "../../config";
 import * as Sentry from "@sentry/node";
 import { withSpan, setSpanAttributes } from "../../lib/otel-tracer";
-import { captureExceptionWithZdrCheck } from "../../services/sentry";
 
 import {
   type Document,
@@ -56,7 +55,6 @@ import { executeTransformers } from "./transformers";
 import { LLMRefusalError } from "./transformers/llmExtract";
 import { urlSpecificParams } from "./lib/urlSpecificParams";
 import { loadMock, MockState } from "./lib/mock";
-import { CostTracking } from "../../lib/cost-tracking";
 import { getEngineForUrl } from "../WebScraper/utils/engine-forcing";
 import { useIndex } from "../../services/index";
 import {

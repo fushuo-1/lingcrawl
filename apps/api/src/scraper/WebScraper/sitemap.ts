@@ -4,7 +4,6 @@ import { WebCrawler, SITEMAP_LIMIT } from "./crawler";
 import { scrapeURL } from "../scrapeURL";
 import { scrapeOptions } from "../../controllers/types";
 import type { Logger } from "winston";
-import { CostTracking } from "../../lib/cost-tracking";
 import { ScrapeJobTimeoutError } from "../../lib/error";
 import type { ScrapeOptions } from "../../controllers/types";
 import { Engine } from "../scrapeURL/engines";

@@ -4,7 +4,6 @@ import { scrapeOptions, ScrapeOptions } from "../../controllers/types";
 import { logger as _logger } from "../../lib/logger";
 import { Engine } from "../scrapeURL/engines";
 import { scrapeURL } from "../scrapeURL";
-import { CostTracking } from "../../lib/cost-tracking";
 import {
   processSitemap,
   SitemapProcessingResult,

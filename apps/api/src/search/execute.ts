@@ -13,7 +13,6 @@ import {
   mergeScrapedContent,
   calculateScrapeCredits,
 } from "./scrape";
-import type { BillingMetadata } from "../services/billing/types";
 
 interface SearchOptions {
   query: string;

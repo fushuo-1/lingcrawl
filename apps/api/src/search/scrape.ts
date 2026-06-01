@@ -1,14 +1,12 @@
 import { v7 as uuidv7 } from "uuid";
 import type { Logger } from "winston";
 import { Document, ScrapeOptions, TeamFlags } from "../controllers/types";
-import { CostTracking } from "../lib/cost-tracking";
 import { getJobPriority } from "../lib/job-priority";
 import { isUrlBlocked } from "../scraper/WebScraper/utils/blocklist";
 import { NuQJob } from "../services/worker/nuq";
 import { processJobInternal } from "../services/worker/scrape-worker";
 import { ScrapeJobData } from "../types";
 import { SearchV2Response } from "../lib/entities";
-import type { BillingMetadata } from "../services/billing/types";
 
 export interface DocumentWithCostTracking {
   document: Document;

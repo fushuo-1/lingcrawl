@@ -17,8 +17,6 @@ import {
 import { _addScrapeJobToBullMQ } from "../../services/queue-jobs";
 import { logger as _logger } from "../../lib/logger";
 import { generateCrawlerOptionsFromPrompt } from "../../scraper/scrapeURL/transformers/llmExtract";
-import { CostTracking } from "../../lib/cost-tracking";
-import { checkPermissions } from "../../lib/permissions";
 import { buildPromptWithWebsiteStructure } from "../../lib/map-utils";
 import { crawlGroup } from "../../services/worker/nuq";
 import { logRequest } from "../../services/logging/log_job";

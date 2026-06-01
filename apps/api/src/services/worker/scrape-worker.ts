@@ -44,13 +44,11 @@ import { getACUCTeam } from "../../controllers/auth";
 import { createWebhookSender, WebhookEvent } from "../webhook/index";
 import { CustomError } from "../../lib/custom-error";
 import { startWebScraperPipeline } from "../../main/runWebScraper";
-import { CostTracking } from "../../lib/cost-tracking";
 import { normalizeUrlOnlyHostname } from "../../lib/canonical-url";
 import { isUrlBlocked } from "../../scraper/WebScraper/utils/blocklist";
 import { UNSUPPORTED_SITE_MESSAGE } from "../../lib/strings";
 import { generateURLSplits, queryIndexAtSplitLevel } from "../index";
 import { WebCrawler } from "../../scraper/WebScraper/crawler";
-import { calculateCreditsToBeBilled } from "../../lib/scrape-billing";
 import { getBillingQueue } from "../queue-service";
 import type { Logger } from "winston";
 import {

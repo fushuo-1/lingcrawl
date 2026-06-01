@@ -6,7 +6,6 @@ import {
   SearchResponse,
   searchRequestSchema,
 } from "./types";
-import { billTeam } from "../../services/billing/credit_billing";
 import { v7 as uuidv7 } from "uuid";
 import { logSearch, logRequest } from "../../services/logging/log_job";
 import { logger as _logger } from "../../lib/logger";
@@ -16,9 +15,7 @@ import { CategoryOption } from "../../lib/search-query-builder";
 import {
   applyZdrScope,
   captureExceptionWithZdrCheck,
-} from "../../services/sentry";
 import { executeSearch } from "../../search/execute";
-import type { BillingMetadata } from "../../services/billing/types";
 
 export async function searchController(
   req: RequestWithAuth<{}, SearchResponse, SearchRequest>,

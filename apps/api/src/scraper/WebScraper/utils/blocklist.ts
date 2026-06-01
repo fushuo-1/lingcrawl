@@ -2,7 +2,6 @@ import { configDotenv } from "dotenv";
 import { config } from "../../../config";
 import { parse } from "tldts";
 import { TeamFlags } from "../../../controllers/types-shared";
-import { supabase_rr_service } from "../../../services/supabase";
 
 configDotenv();
 

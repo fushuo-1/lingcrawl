@@ -14,9 +14,7 @@ import {
 } from "../../lib/gcs-jobs";
 import { hasFormatOfType } from "../../lib/format-utils";
 import type { Document, ScrapeOptions } from "../../controllers/types";
-import type { CostTracking } from "../../lib/cost-tracking";
 import type { Logger } from "winston";
-import { saveExtractResult } from "../../lib/extract/extract-redis";
 configDotenv();
 
 const previewTeamId = "3adefd26-77ec-5968-8dcf-c94b5630d1de";

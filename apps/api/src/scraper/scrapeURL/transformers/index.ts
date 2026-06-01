@@ -22,7 +22,6 @@ import { sendDocumentToIndex } from "../engines/index/index";
 import { sendDocumentToSearchIndex } from "./sendToSearchIndex";
 import { hasFormatOfType } from "../../../lib/format-utils";
 import { brandingTransformer } from "../../../lib/branding/transformer";
-import { indexerQueue } from "../../../services/indexing/indexer-queue";
 import { config } from "../../../config";
 
 type Transformer = (

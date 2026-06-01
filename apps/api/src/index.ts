@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { config } from "./config";
 import "./services/sentry";
-import { setSentryServiceTag } from "./services/sentry";
 import * as Sentry from "@sentry/node";
 import express, { NextFunction, Request, Response } from "express";
 import bodyParser from "body-parser";
@@ -25,15 +24,12 @@ import {
 import { ZodError } from "zod";
 import { QueueFullError } from "./lib/concurrency-limit";
 import { v7 as uuidv7 } from "uuid";
-import { attachWsProxy } from "./services/agentLivecastWS";
 import { cacheableLookup } from "./scraper/scrapeURL/lib/cacheableLookup";
 import { nuqShutdown } from "./services/worker/nuq";
 import { getErrorContactMessage } from "./lib/deployment";
 import { initializeBlocklist } from "./scraper/WebScraper/utils/blocklist";
 import { initializeEngineForcing } from "./scraper/WebScraper/utils/engine-forcing";
 import responseTime from "response-time";
-import { shutdownWebhookQueue } from "./services/webhook";
-import { shutdownIndexerQueue } from "./services/indexing/indexer-queue";
 
 const { createBullBoard } = require("@bull-board/api");
 const { BullMQAdapter } = require("@bull-board/api/bullMQAdapter");

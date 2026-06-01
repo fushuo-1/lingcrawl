@@ -4,7 +4,6 @@ import { logger as _logger } from "../../lib/logger";
 import {
   Document,
   FormatObject,
-  RequestWithAuth,
   ScrapeRequest,
   scrapeRequestSchema,
   ScrapeResponse,
@@ -13,27 +12,21 @@ import { v7 as uuidv7 } from "uuid";
 import { hasFormatOfType } from "../../lib/format-utils";
 import { TransportableError } from "../../lib/error";
 import { NuQJob } from "../../services/worker/nuq";
-import { checkPermissions } from "../../lib/permissions";
 import { withSpan, setSpanAttributes, SpanKind } from "../../lib/otel-tracer";
 import { processJobInternal } from "../../services/worker/scrape-worker";
 import { ScrapeJobData } from "../../types";
 import { teamConcurrencySemaphore } from "../../services/worker/team-semaphore";
-import { getJobPriority } from "../../lib/job-priority";
 import { logRequest } from "../../services/logging/log_job";
 import { getErrorContactMessage } from "../../lib/deployment";
-import { captureExceptionWithZdrCheck } from "../../services/sentry";
-import type { BillingMetadata } from "../../services/billing/types";
-
-const AGENT_INTEROP_CONCURRENCY_BOOST = 3;
+import { Request } from "express";
 
 export async function scrapeController(
-  req: RequestWithAuth<{}, ScrapeResponse, ScrapeRequest>,
+  req: Request<{}, ScrapeResponse, ScrapeRequest>,
   res: Response<ScrapeResponse>,
 ) {
   return withSpan(
     "api.scrape.request",
     async span => {
-      // Get timing data from middleware (includes all middleware processing time)
       const middlewareStartTime =
         (req as any).requestTiming?.startTime || new Date().getTime();
       const controllerStartTime = new Date().getTime();
@@ -41,81 +34,26 @@ export async function scrapeController(
       const jobId = uuidv7();
       const preNormalizedBody = { ...req.body };
 
-      // Set initial span attributes
       setSpanAttributes(span, {
         "scrape.job_id": jobId,
         "scrape.url": req.body.url,
-        "scrape.team_id": req.auth.team_id,
-        "scrape.api_key_id": req.acuc?.api_key_id,
         "scrape.middleware_time_ms": controllerStartTime - middlewareStartTime,
       });
 
-      // Validation span
       await withSpan("api.scrape.validate", async validateSpan => {
         req.body = scrapeRequestSchema.parse(req.body);
-        setSpanAttributes(validateSpan, {
-          "validation.success": true,
-        });
+        setSpanAttributes(validateSpan, { "validation.success": true });
       });
 
-      // Permission check span
-      const permissions = await withSpan(
-        "api.scrape.check_permissions",
-        async permSpan => {
-          const perms = checkPermissions(req.body, req.acuc?.flags);
-          setSpanAttributes(permSpan, {
-            "permissions.success": !perms.error,
-            "permissions.error": perms.error,
-          });
-          return perms;
-        },
-      );
-
-      if (permissions.error) {
-        setSpanAttributes(span, {
-          "scrape.error": permissions.error,
-          "scrape.status_code": 403,
-        });
-        return res.status(403).json({
-          success: false,
-          error: permissions.error,
-        });
-      }
-
-      const zeroDataRetention =
-        req.acuc?.flags?.forceZDR || (req.body.zeroDataRetention ?? false);
-      const billing: BillingMetadata = req.body.__agentInterop
-        ? { endpoint: "agent" as const, jobId }
-        : { endpoint: "scrape" as const, jobId };
-
-      if (
-        req.body.__agentInterop &&
-        config.AGENT_INTEROP_SECRET &&
-        req.body.__agentInterop.auth !== config.AGENT_INTEROP_SECRET
-      ) {
-        return res.status(403).json({
-          success: false,
-          error: "Invalid agent interop.",
-        });
-      } else if (req.body.__agentInterop && !config.AGENT_INTEROP_SECRET) {
-        return res.status(403).json({
-          success: false,
-          error: "Agent interop is not enabled.",
-        });
-      }
-
-      const shouldBill = req.body.__agentInterop?.shouldBill ?? true;
-      const agentRequestId = req.body.__agentInterop?.requestId ?? null;
-      const boostConcurrency =
-        req.body.__agentInterop?.boostConcurrency ?? false;
+      const zeroDataRetention = req.body.zeroDataRetention ?? false;
+      const teamId = "local";
 
       const logger = _logger.child({
         method: "scrapeController",
         jobId,
         noq: true,
         scrapeId: jobId,
-        teamId: req.auth.team_id,
-        team_id: req.auth.team_id,
+        teamId,
         zeroDataRetention,
       });
 
@@ -126,24 +64,21 @@ export async function scrapeController(
         scrapeId: jobId,
         request: req.body,
         originalRequest: preNormalizedBody,
-        account: req.account,
       });
 
-      if (!agentRequestId) {
-        logRequest({
-          id: jobId,
-          kind: "scrape",
-          api_version: "v2",
-          team_id: req.auth.team_id,
-          origin: req.body.origin ?? "api",
-          integration: req.body.integration,
-          target_hint: req.body.url,
-          zeroDataRetention: zeroDataRetention || false,
-          api_key_id: req.acuc?.api_key_id ?? null,
-        }).catch(err =>
-          logger.warn("Background request log failed", { error: err, jobId }),
-        );
-      }
+      logRequest({
+        id: jobId,
+        kind: "scrape",
+        api_version: "v2",
+        team_id: teamId,
+        origin: req.body.origin ?? "api",
+        integration: req.body.integration,
+        target_hint: req.body.url,
+        zeroDataRetention: zeroDataRetention || false,
+        api_key_id: null,
+      }).catch(err =>
+        logger.warn("Background request log failed", { error: err, jobId }),
+      );
 
       setSpanAttributes(span, {
         "scrape.zero_data_retention": zeroDataRetention,
@@ -153,10 +88,6 @@ export async function scrapeController(
 
       const origin = req.body.origin;
       const timeout = req.body.timeout;
-
-      const isDirectToBullMQ =
-        config.SEARCH_PREVIEW_TOKEN !== undefined &&
-        config.SEARCH_PREVIEW_TOKEN === req.body.__searchPreviewToken;
 
       const totalWait =
         (req.body.waitFor ?? 0) +
@@ -175,40 +106,30 @@ export async function scrapeController(
         const lockStart = Date.now();
         const aborter = new AbortController();
         if (timeout) {
-          // Semaphore has 2/3 of the timeout time to get a lock to allow for scrape time
           timeoutHandle = setTimeout(() => {
             aborter.abort();
           }, timeout * 0.667);
         }
         req.on("close", () => aborter.abort());
 
-        const baseConcurrency = req.acuc?.concurrency || 1;
-        const concurrency = boostConcurrency
-          ? baseConcurrency * AGENT_INTEROP_CONCURRENCY_BOOST
-          : baseConcurrency;
+        const concurrency = 8;
 
         doc = await teamConcurrencySemaphore.withSemaphore(
-          req.auth.team_id,
+          teamId,
           jobId,
           concurrency,
           aborter.signal,
           timeout ?? 60_000,
           async limited => {
-            const jobPriority = await getJobPriority({
-              team_id: req.auth.team_id,
-              basePriority: 10,
-            });
-
             lockTime = Date.now() - lockStart;
             concurrencyLimited = limited;
 
-            logger.debug(`Lock acquired for team: ${req.auth.team_id}`, {
-              teamId: req.auth.team_id,
+            logger.debug(`Lock acquired for team: ${teamId}`, {
+              teamId,
               lockTime,
               limited,
             });
 
-            // Wait for job completion span
             const doc = await withSpan(
               "api.scrape.wait_for_job",
               async waitSpan => {
@@ -220,51 +141,37 @@ export async function scrapeController(
 
                 const job: NuQJob<ScrapeJobData> = {
                   id: jobId,
-
                   status: "active",
                   createdAt: new Date(),
-                  priority: jobPriority,
+                  priority: 10,
                   data: {
                     url: req.body.url,
                     mode: "single_urls",
-                    team_id: req.auth.team_id,
+                    team_id: teamId,
                     scrapeOptions: {
                       ...req.body,
-                      ...((req.body as any).__experimental_cache
-                        ? {
-                            maxAge: req.body.maxAge ?? 4 * 60 * 60 * 1000, // 4 hours
-                          }
-                        : {}),
                     },
                     internalOptions: {
-                      teamId: req.auth.team_id,
-                      saveScrapeResultToGCS: process.env
-                        .GCS_FIRE_ENGINE_BUCKET_NAME
-                        ? true
-                        : false,
+                      teamId,
+                      saveScrapeResultToGCS: false,
                       unnormalizedSourceURL: preNormalizedBody.url,
-                      bypassBilling: isDirectToBullMQ || !shouldBill,
+                      bypassBilling: true,
                       zeroDataRetention,
-                      teamFlags: req.acuc?.flags ?? null,
+                      teamFlags: null,
                     },
                     skipNuq: true,
                     origin,
                     integration: req.body.integration,
-                    billing,
                     startTime: controllerStartTime,
                     zeroDataRetention,
-                    apiKeyId: req.acuc?.api_key_id ?? null,
+                    apiKeyId: null,
                     concurrencyLimited: limited,
-                    requestId: agentRequestId ?? undefined,
                   },
                 };
 
                 const result = await processJobInternal(job);
 
-                setSpanAttributes(waitSpan, {
-                  "wait.success": true,
-                });
-
+                setSpanAttributes(waitSpan, { "wait.success": true });
                 return result ?? null;
               },
             );
@@ -289,49 +196,17 @@ export async function scrapeController(
               error: e,
             });
           }
-          // DNS resolution errors should return 200 with success: false
           if (e.code === "SCRAPE_DNS_RESOLUTION_ERROR") {
-            setSpanAttributes(span, {
-              "scrape.status_code": 200,
-            });
-            return res.status(200).json({
-              success: false,
-              code: e.code,
-              error: e.message,
-            });
+            return res.status(200).json({ success: false, code: e.code, error: e.message });
           }
-
           if (e.code === "SCRAPE_NO_CACHED_DATA") {
-            setSpanAttributes(span, {
-              "scrape.status_code": 404,
-            });
-            return res.status(404).json({
-              success: false,
-              code: e.code,
-              error: e.message,
-            });
+            return res.status(404).json({ success: false, code: e.code, error: e.message });
           }
-
           if (e.code === "SCRAPE_ACTIONS_NOT_SUPPORTED") {
-            setSpanAttributes(span, {
-              "scrape.status_code": 400,
-            });
-            return res.status(400).json({
-              success: false,
-              code: e.code,
-              error: e.message,
-            });
+            return res.status(400).json({ success: false, code: e.code, error: e.message });
           }
-
           const statusCode = e.code === "SCRAPE_TIMEOUT" ? 408 : 500;
-          setSpanAttributes(span, {
-            "scrape.status_code": statusCode,
-          });
-          return res.status(statusCode).json({
-            success: false,
-            code: e.code,
-            error: e.message,
-          });
+          return res.status(statusCode).json({ success: false, code: e.code, error: e.message });
         } else {
           const id = uuidv7();
           logger.error(`Error in scrapeController`, {
@@ -339,23 +214,6 @@ export async function scrapeController(
             error: e,
             errorId: id,
             path: req.path,
-            teamId: req.auth.team_id,
-          });
-          captureExceptionWithZdrCheck(e, {
-            tags: {
-              errorId: id,
-              version: "v2",
-              teamId: req.auth.team_id,
-            },
-            extra: {
-              path: req.path,
-              url: req.body.url,
-            },
-            zeroDataRetention,
-          });
-          setSpanAttributes(span, {
-            "scrape.status_code": 500,
-            "scrape.error_id": id,
           });
           return res.status(500).json({
             success: false,
@@ -378,7 +236,6 @@ export async function scrapeController(
       const totalRequestTime = new Date().getTime() - middlewareStartTime;
       const controllerTime = new Date().getTime() - controllerStartTime;
 
-      // Set final span attributes
       setSpanAttributes(span, {
         "scrape.success": true,
         "scrape.status_code": 200,
@@ -398,7 +255,6 @@ export async function scrapeController(
 
       if (!usedLlm) {
         const ct = hasFormatOfType(req.body.formats, "changeTracking");
-
         if (ct && ct.modes?.includes("json")) {
           usedLlm = true;
         }

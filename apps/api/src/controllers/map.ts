@@ -6,11 +6,9 @@ import {
   MapResponse,
 } from "./types";
 import { configDotenv } from "dotenv";
-import { billTeam } from "../../services/billing/credit_billing";
 import { logMap, logRequest } from "../../services/logging/log_job";
 import { logger as _logger } from "../../lib/logger";
 import { MapTimeoutError } from "../../lib/error";
-import { checkPermissions } from "../../lib/permissions";
 import { getMapResults, MapResult } from "../../lib/map-utils";
 import { v7 as uuidv7 } from "uuid";
 import { isBaseDomain, extractBaseDomain } from "../../lib/url-utils";
