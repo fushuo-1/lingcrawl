@@ -1,11 +1,8 @@
 name: lingcrawl
 
 x-common-service: &common-service
-  # NOTE: If you don't want to build the service locally,
-  # comment out the build: statement and uncomment the image: statement
   image: ghcr.io/lingcrawl/lingcrawl
   # build: apps/api
-
   ulimits:
     nofile:
       soft: 65535
@@ -30,24 +27,16 @@ x-common-env: &common-env
   POSTGRES_DB: ${POSTGRES_DB:-postgres}
   POSTGRES_HOST: ${POSTGRES_HOST:-nuq-postgres}
   POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-  USE_DB_AUTHENTICATION: ${USE_DB_AUTHENTICATION:-false}
   NUM_WORKERS_PER_QUEUE: ${NUM_WORKERS_PER_QUEUE:-8}
   CRAWL_CONCURRENT_REQUESTS: ${CRAWL_CONCURRENT_REQUESTS:-10}
   MAX_CONCURRENT_JOBS: ${MAX_CONCURRENT_JOBS:-5}
   BROWSER_POOL_SIZE: ${BROWSER_POOL_SIZE:-5}
   OPENAI_API_KEY: ${OPENAI_API_KEY}
-  OPENAI_BASE_URL: ${OPENAI_BASE_URL}
-  MODEL_NAME: ${MODEL_NAME}
-  MODEL_EMBEDDING_NAME: ${MODEL_EMBEDDING_NAME} 
-  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL} 
-  AUTUMN_SECRET_KEY: ${AUTUMN_SECRET_KEY}
-  SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+  GITHUB_TOKEN: ${GITHUB_TOKEN}
   BULL_AUTH_KEY: ${BULL_AUTH_KEY}
-  TEST_API_KEY: ${TEST_API_KEY}
-  SUPABASE_ANON_TOKEN: ${SUPABASE_ANON_TOKEN}
-  SUPABASE_URL: ${SUPABASE_URL}
-  SUPABASE_SERVICE_TOKEN: ${SUPABASE_SERVICE_TOKEN}
   SELF_HOSTED_WEBHOOK_URL: ${SELF_HOSTED_WEBHOOK_URL}
+  SELF_HOSTED_WEBHOOK_HMAC_SECRET: ${SELF_HOSTED_WEBHOOK_HMAC_SECRET}
   LOGGING_LEVEL: ${LOGGING_LEVEL}
   PROXY_SERVER: ${PROXY_SERVER}
   PROXY_USERNAME: ${PROXY_USERNAME}
@@ -55,13 +44,9 @@ x-common-env: &common-env
   SEARXNG_ENDPOINT: ${SEARXNG_ENDPOINT}
   SEARXNG_ENGINES: ${SEARXNG_ENGINES}
   SEARXNG_CATEGORIES: ${SEARXNG_CATEGORIES}
-  BAILIAN_MCP_URL: ${BAILIAN_MCP_URL}
-  BAILIAN_API_KEY: ${BAILIAN_API_KEY}
 
 services:
   playwright-service:
-    # NOTE: If you don't want to build the service locally,
-    # comment out the build: statement and uncomment the image: statement
     image: ghcr.io/lingcrawl/playwright-service:latest
     # build: apps/playwright-service-ts
     environment:
@@ -76,7 +61,6 @@ services:
       - "3000:3000"
     networks:
       - backend
-    # Resource limits for Docker Compose (not Swarm)
     cpus: 2.0
     mem_limit: 4G
     memswap_limit: 4G
@@ -121,8 +105,6 @@ services:
       - ./docker-dist/routes-v1.js:/app/dist/src/routes/v1.js:ro
       - ./docker-dist/routes-v2.js:/app/dist/src/routes/v2.js:ro
       - ./docker-dist/routes-admin.js:/app/dist/src/routes/admin.js:ro
-    # Resource limits for Docker Compose (not Swarm)
-    # Increase if you have more CPU cores/RAM available
     cpus: 4.0
     mem_limit: 8G
     memswap_limit: 8G
@@ -153,7 +135,7 @@ services:
         max-size: "5m"
         max-file: "2"
         compress: "true"
-    
+
   rabbitmq:
     image: rabbitmq:3-management
     ports:
@@ -174,17 +156,17 @@ services:
         max-size: "5m"
         max-file: "2"
         compress: "true"
-  
+
   nuq-postgres:
     build: apps/nuq-postgres
     ports:
       - "5432:5432"
+    networks:
+      - backend
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
-    networks:
-      - backend
     logging:
       driver: "json-file"
       options:
