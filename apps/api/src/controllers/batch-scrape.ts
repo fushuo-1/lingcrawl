@@ -104,7 +104,6 @@ export async function batchScrapeController(
     await logRequest({
       id,
       kind: "batch_scrape",
-      api_version: "v2",
       team_id: "local",
       origin: req.body.origin ?? "api",
       integration: req.body.integration,

@@ -17,6 +17,12 @@ import { integrationSchema } from "../../utils/integration";
 import { includesFormat } from "../../lib/format-utils";
 import { BrandingProfile } from "../../types/branding";
 
+// Minimal webhook schema (needed locally to avoid circular import with types.ts)
+const webhookSchema = z.object({
+  url: z.string().url(),
+  events: z.array(z.string()).optional(),
+});
+
 type Format =
   | "markdown"
   | "html"
@@ -1401,7 +1407,6 @@ function fromLegacyCrawlerOptions(
       delay: x.delay,
     }),
     internalOptions: {
-      v0CrawlOnlyUrls: x.returnOnlyUrls,
       teamId,
     },
   };
@@ -1466,7 +1471,6 @@ export function fromLegacyScrapeOptions(
     }),
     internalOptions: {
       atsv: pageOptions.atsv,
-      v0DisableJsDom: pageOptions.disableJsDom,
       teamId,
     },
     // TODO: fallback, fetchPageContent, replaceAllPathsWithAbsolutePaths, includeLinks
@@ -1477,10 +1481,6 @@ export function toLegacyDocument(
   document: Document,
   internalOptions: InternalOptions,
 ): V0Document | { url: string } {
-  if (internalOptions.v0CrawlOnlyUrls) {
-    return { url: document.metadata.sourceURL! };
-  }
-
   // backwards compatibility to v0 API
   const markdown = document.markdown ?? "";
 

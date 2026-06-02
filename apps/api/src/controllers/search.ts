@@ -48,7 +48,6 @@ export async function searchController(
     await logRequest({
       id: jobId,
       kind: "search",
-      api_version: "v2",
       team_id: "local",
       origin: req.body.origin ?? "api",
       integration: req.body.integration,

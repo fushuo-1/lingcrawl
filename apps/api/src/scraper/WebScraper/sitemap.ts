@@ -113,7 +113,6 @@ export async function getLinksFromSitemap(
           }),
           {
             forceEngine,
-            v0DisableJsDom: true,
             externalAbort: abort
               ? {
                   signal: abort,

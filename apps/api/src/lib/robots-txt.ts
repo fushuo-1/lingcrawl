@@ -44,7 +44,6 @@ export async function fetchRobotsTxt(
     }),
     {
       forceEngine,
-      v0DisableJsDom: true,
       externalAbort: abort
         ? {
             signal: abort,

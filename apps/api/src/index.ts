@@ -97,9 +97,7 @@ app.get("/health/liveness", (_, res) => res.status(200).json({ status: "ok" }));
 app.get("/health/readiness", (_, res) => res.status(200).json({ status: "ok" }));
 
 // register router
-app.use(apiRouter);        // root-level
-app.use("/v1", apiRouter); // /v1 backward compatibility
-app.use("/v2", apiRouter); // /v2 backward compatibility
+app.use("/api", apiRouter); // /api prefix
 app.use(adminRouter);
 
 const DEFAULT_PORT = config.PORT;

@@ -10,7 +10,6 @@ import {
   type ScrapeOptions,
   type TeamFlags,
 } from "../../controllers/types";
-import { ScrapeOptions as ScrapeOptionsV1 } from "../../controllers/types-shared";
 import { logger as _logger } from "../../lib/logger";
 import {
   buildFallbackList,
@@ -302,8 +301,6 @@ export type InternalOptions = {
   forceEngine?: Engine | Engine[];
   atsv?: boolean; // anti-bot solver, beta
 
-  v0CrawlOnlyUrls?: boolean;
-  v0DisableJsDom?: boolean;
   disableSmartWaitCache?: boolean; // Passed along to fire-engine
   isBackgroundIndex?: boolean;
   externalAbort?: AbortInstance;
@@ -314,11 +311,6 @@ export type InternalOptions = {
   bypassBilling?: boolean;
   zeroDataRetention?: boolean;
   teamFlags?: TeamFlags;
-
-  v1Agent?: ScrapeOptionsV1["agent"];
-  v1JSONAgent?: Exclude<ScrapeOptionsV1["jsonOptions"], undefined>["agent"];
-  v1JSONSystemPrompt?: string;
-  v1OriginalFormat?: "extract" | "json"; // Track original v1 format for backward compatibility
 
   isPreCrawl?: boolean; // Whether this scrape is part of a precrawl job
 };

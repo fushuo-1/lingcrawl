@@ -16,10 +16,20 @@ import { ErrorCodes } from "../../lib/error";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import { integrationSchema } from "../../utils/integration";
-import {
-  webhookSchema,
-  createWebhookSchema,
 import { BrandingProfile } from "../../types/branding";
+
+// Minimal webhook schemas (trimmed from original codebase)
+export const webhookSchema = z.object({
+  url: z.string().url(),
+  events: z.array(z.string()).optional(),
+});
+
+export function createWebhookSchema(events: string[]) {
+  return z.object({
+    url: z.string().url(),
+    events: z.array(z.enum(events as [string, ...string[]])).optional(),
+  });
+}
 
 // Base URL schema with common validation logic
 export const URL = z.preprocess(

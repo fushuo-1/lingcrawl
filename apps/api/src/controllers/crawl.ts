@@ -42,7 +42,6 @@ export async function crawlController(
   await logRequest({
     id,
     kind: "crawl",
-    api_version: "v2",
     team_id: "local",
     origin: req.body.origin ?? "api",
     integration: req.body.integration,

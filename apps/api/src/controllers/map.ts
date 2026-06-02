@@ -45,7 +45,6 @@ export async function mapController(
   await logRequest({
     id: mapId,
     kind: "map",
-    api_version: "v2",
     team_id: "local",
     origin: req.body.origin ?? "api",
     integration: req.body.integration,

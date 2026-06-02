@@ -84,7 +84,6 @@ async function getSitemapXML(options: SitemapScrapeOptions): Promise<string> {
     }),
     {
       forceEngine,
-      v0DisableJsDom: true,
       // externalAbort: options.abort,
       teamId: "sitemap",
       zeroDataRetention: options.zeroDataRetention,

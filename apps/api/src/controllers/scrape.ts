@@ -69,7 +69,6 @@ export async function scrapeController(
       logRequest({
         id: jobId,
         kind: "scrape",
-        api_version: "v2",
         team_id: teamId,
         origin: req.body.origin ?? "api",
         integration: req.body.integration,
