@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { config } from "../../../../config";
-import { EngineScrapeResult } from "..";
+import { EngineScrapeResult, registerEngine } from "..";
 import { Meta } from "../..";
 import { robustFetch } from "../../lib/fetch";
 import { getInnerJson } from "@lingcrawl/lingcrawl-rs";
@@ -49,4 +49,32 @@ export async function scrapeURLWithPlaywright(
 
 export function playwrightMaxReasonableTime(meta: Meta): number {
   return (meta.options.waitFor ?? 0) + 30000;
+}
+
+if (
+  config.PLAYWRIGHT_MICROSERVICE_URL !== "" &&
+  config.PLAYWRIGHT_MICROSERVICE_URL !== undefined
+) {
+  registerEngine({
+    name: "playwright",
+    handler: scrapeURLWithPlaywright,
+    maxReasonableTime: playwrightMaxReasonableTime,
+    features: {
+      actions: false,
+      waitFor: true,
+      screenshot: false,
+      "screenshot@fullScreen": false,
+      pdf: false,
+      document: false,
+      atsv: false,
+      location: false,
+      mobile: false,
+      skipTlsVerification: true,
+      useFastMode: false,
+      stealthProxy: false,
+      branding: false,
+      disableAdblock: false,
+    },
+    quality: 20,
+  });
 }

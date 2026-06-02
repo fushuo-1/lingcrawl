@@ -1,12 +1,5 @@
 import { ScrapeActionContent } from "../../../lib/entities";
-import { config } from "../../../config";
 import { Meta } from "..";
-import { pdfMaxReasonableTime, scrapePDF } from "./pdf";
-import { fetchMaxReasonableTime, scrapeURLWithFetch } from "./fetch";
-import {
-  playwrightMaxReasonableTime,
-  scrapeURLWithPlaywright,
-} from "./playwright";
 import { hasFormatOfType } from "../../../lib/format-utils";
 import { getPDFMaxPages } from "../../../controllers/types";
 import type { PdfMetadata } from "./pdf/types";
@@ -17,16 +10,6 @@ export type Engine =
   | "playwright"
   | "fetch"
   | "pdf";
-
-const usePlaywright =
-  config.PLAYWRIGHT_MICROSERVICE_URL !== "" &&
-  config.PLAYWRIGHT_MICROSERVICE_URL !== undefined;
-
-const engines: Engine[] = [
-  ...(usePlaywright ? ["playwright" as const] : []),
-  "fetch",
-  "pdf",
-];
 
 const featureFlags = [
   "actions",
@@ -46,6 +29,20 @@ const featureFlags = [
 ] as const;
 
 export type FeatureFlag = (typeof featureFlags)[number];
+
+export interface EngineDescriptor {
+  name: Engine;
+  handler: (meta: Meta) => Promise<EngineScrapeResult>;
+  maxReasonableTime: (meta: Meta) => number;
+  features: { [F in FeatureFlag]: boolean };
+  quality: number;
+}
+
+const registry = new Map<Engine, EngineDescriptor>();
+
+export function registerEngine(desc: EngineDescriptor): void {
+  registry.set(desc.name, desc);
+}
 
 const featureFlagOptions: {
   [F in FeatureFlag]: {
@@ -104,94 +101,13 @@ export type EngineScrapeResult = {
   timezone?: string;
 };
 
-const engineHandlers: {
-  [E in Engine]: (meta: Meta) => Promise<EngineScrapeResult>;
-} = {
-  playwright: scrapeURLWithPlaywright,
-  fetch: scrapeURLWithFetch,
-  pdf: scrapePDF,
-};
-
-const engineMRTs: {
-  [E in Engine]: (meta: Meta) => number;
-} = {
-  playwright: playwrightMaxReasonableTime,
-  fetch: fetchMaxReasonableTime,
-  pdf: pdfMaxReasonableTime,
-};
-
-const engineOptions: {
-  [E in Engine]: {
-    features: { [F in FeatureFlag]: boolean };
-    quality: number;
-  };
-} = {
-  playwright: {
-    features: {
-      actions: false,
-      waitFor: true,
-      screenshot: false,
-      "screenshot@fullScreen": false,
-      pdf: false,
-      document: false,
-      atsv: false,
-      location: false,
-      mobile: false,
-      skipTlsVerification: true,
-      useFastMode: false,
-      stealthProxy: false,
-      branding: false,
-      disableAdblock: false,
-    },
-    quality: 20,
-  },
-  fetch: {
-    features: {
-      actions: false,
-      waitFor: false,
-      screenshot: false,
-      "screenshot@fullScreen": false,
-      pdf: false,
-      document: false,
-      atsv: false,
-      location: false,
-      mobile: false,
-      skipTlsVerification: true,
-      useFastMode: true,
-      stealthProxy: false,
-      branding: false,
-      disableAdblock: false,
-    },
-    quality: 5,
-  },
-  pdf: {
-    features: {
-      actions: false,
-      waitFor: false,
-      screenshot: false,
-      "screenshot@fullScreen": false,
-      pdf: true,
-      document: false,
-      atsv: false,
-      location: false,
-      mobile: false,
-      skipTlsVerification: false,
-      useFastMode: true,
-      stealthProxy: true,
-      branding: false,
-      disableAdblock: true,
-    },
-    quality: -20,
-  },
-};
-
 export async function buildFallbackList(meta: Meta): Promise<
   {
     engine: Engine;
     unsupportedFeatures: Set<FeatureFlag>;
   }[]
 > {
-  const _engines: Engine[] = [...engines];
+  const engines = [...registry.keys()];
 
   const prioritySum = [...meta.featureFlags].reduce(
     (a, x) => a + featureFlagOptions[x].priority,
@@ -209,11 +125,14 @@ export async function buildFallbackList(meta: Meta): Promise<
       ? Array.isArray(meta.internalOptions.forceEngine)
         ? meta.internalOptions.forceEngine
         : [meta.internalOptions.forceEngine]
-      : _engines;
+      : engines;
 
   for (const engine of currentEngines) {
+    const desc = registry.get(engine as Engine);
+    if (desc === undefined) continue;
+
     const supportedFlags = new Set([
-      ...Object.entries(engineOptions[engine].features)
+      ...Object.entries(desc.features)
         .filter(
           ([k, v]) => meta.featureFlags.has(k as FeatureFlag) && v === true,
         )
@@ -236,9 +155,9 @@ export async function buildFallbackList(meta: Meta): Promise<
     }
   }
 
-  if (selectedEngines.some(x => engineOptions[x.engine].quality > 0)) {
+  if (selectedEngines.some(x => registry.get(x.engine)!.quality > 0)) {
     selectedEngines = selectedEngines.filter(
-      x => engineOptions[x.engine].quality > 0,
+      x => registry.get(x.engine)!.quality > 0,
     );
   }
 
@@ -246,7 +165,7 @@ export async function buildFallbackList(meta: Meta): Promise<
     selectedEngines.sort(
       (a, b) =>
         b.supportScore - a.supportScore ||
-        engineOptions[b.engine].quality - engineOptions[a.engine].quality,
+        registry.get(b.engine)!.quality - registry.get(a.engine)!.quality,
     );
   }
 
@@ -267,14 +186,18 @@ export async function scrapeURLWithEngine(
   meta: Meta,
   engine: Engine,
 ): Promise<EngineScrapeResult> {
-  const fn = engineHandlers[engine];
+  const desc = registry.get(engine);
+  if (desc === undefined) {
+    throw new Error(`No engine registered for "${engine}"`);
+  }
+
   const logger = meta.logger.child({
-    method: fn.name ?? "scrapeURLWithEngine",
+    method: desc.handler.name ?? "scrapeURLWithEngine",
     engine,
   });
 
   const featureFlags = new Set(meta.featureFlags);
-  if (engineOptions[engine].features.stealthProxy) {
+  if (desc.features.stealthProxy) {
     featureFlags.add("stealthProxy");
   }
 
@@ -284,14 +207,19 @@ export async function scrapeURLWithEngine(
     featureFlags,
   };
 
-  return await fn(_meta);
+  return await desc.handler(_meta);
 }
 
 export function getEngineMaxReasonableTime(meta: Meta, engine: Engine): number {
-  const mrt = engineMRTs[engine];
-  if (mrt === undefined) {
+  const desc = registry.get(engine);
+  if (desc === undefined) {
     meta.logger.warn("No MRT for engine", { engine });
     return 30000;
   }
-  return mrt(meta);
+  return desc.maxReasonableTime(meta);
+}
+
+// Stub: shouldUseIndex removed in self-hosted mode
+export function shouldUseIndex(...args: any[]): boolean {
+  return false;
 }
