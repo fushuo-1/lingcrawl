@@ -14,11 +14,15 @@ WORKDIR /app
 COPY sharedLibs/go-html-to-md ./sharedLibs/go-html-to-md
 
 RUN cd sharedLibs/go-html-to-md && \
-    go mod download && \
+    go mod tidy && \
     go build -o libhtml-to-markdown.so -buildmode=c-shared html-to-markdown.go
 
 FROM base AS build
 WORKDIR /app
+
+# Accept GitHub token for private repos
+ARG GITHUB_TOKEN
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -26,7 +30,11 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
     python3 \
+    git \
     && rm -rf /var/lib/apt/lists/*
+
+# Configure git to use GitHub token for private repos
+RUN if [ -n "$GITHUB_TOKEN" ]; then git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"; fi
 
 # Install Rust
 ENV RUSTUP_HOME=/usr/local/rustup \

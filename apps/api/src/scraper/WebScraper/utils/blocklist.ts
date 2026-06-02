@@ -1,6 +1,6 @@
 import { configDotenv } from "dotenv";
 import { parse } from "tldts";
-import { TeamFlags } from "../../../controllers/types-shared";
+import { TeamFlags } from "../../../controllers/types";
 
 configDotenv();
 

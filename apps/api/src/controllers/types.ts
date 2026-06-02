@@ -1,22 +1,18 @@
 import { Request, Response } from "express";
-import { config } from "../../config";
+import { config } from "../config";
 import { z } from "zod";
-import { protocolIncluded, checkUrl } from "../../lib/validateUrl";
-import { countries } from "../../lib/validate-country";
-import { includesFormat } from "../../lib/format-utils";
+import { protocolIncluded, checkUrl } from "../lib/validateUrl";
+import { countries } from "../lib/validate-country";
+import { includesFormat } from "../lib/format-utils";
 import {
   ScrapeActionContent,
-} from "../../lib/entities";
-import {
-  agentOptionsExtract,
-  AuthCreditUsageChunk,
-} from "../types-shared";
-import type { InternalOptions } from "../../scraper/scrapeURL";
-import { ErrorCodes } from "../../lib/error";
+} from "../lib/entities";
+import type { InternalOptions } from "../scraper/scrapeURL";
+import { ErrorCodes } from "../lib/error";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
-import { integrationSchema } from "../../utils/integration";
-import { BrandingProfile } from "../../types/branding";
+import { integrationSchema } from "../utils/integration";
+import { BrandingProfile } from "../types/branding";
 
 // Minimal webhook schemas (trimmed from original codebase)
 export const webhookSchema = z.object({
@@ -673,6 +669,14 @@ export type ScrapeOptions = BaseScrapeOptions;
 const ajv = new Ajv();
 const agentAjv = new Ajv();
 addFormats(agentAjv);
+
+const agentExtractModelValue = "fire-1";
+export const isAgentExtractModelValid = (x: string | undefined) =>
+  x?.toLowerCase() === agentExtractModelValue;
+
+export const agentOptionsExtract = z.strictObject({
+  model: z.string().prefault(agentExtractModelValue),
+});
 
 const extractOptions = z
   .strictObject({
@@ -1579,14 +1583,14 @@ export type SearchResponse =
   | {
       success: true;
       warning?: string;
-      data: import("../../lib/entities").SearchV2Response;
+      data: import("../lib/entities").SearchV2Response;
       creditsUsed: number;
       id: string;
     }
   | {
       success: true;
       warning?: string;
-      data: import("../../lib/entities").SearchV2Response;
+      data: import("../lib/entities").SearchV2Response;
       scrapeIds: {
         web?: string[];
         news?: string[];
@@ -1624,3 +1628,38 @@ const generateLLMsTextRequestSchema = z.object({
 });
 
 type GenerateLLMsTextRequest = z.infer<typeof generateLLMsTextRequestSchema>;
+
+// === Exports merged from types-shared.ts (v1 compatibility) ===
+
+export type Action = z.infer<typeof actionSchema>;
+
+export type InternalAction = Action & {
+  metadata?: { [key: string]: unknown };
+};
+
+export interface RequestWithMaybeACUC<
+  ReqParams = {},
+  ReqBody = undefined,
+  ResBody = undefined,
+> extends Request<ReqParams, ReqBody, ResBody> {
+  acuc?: any;
+}
+
+export interface RequestWithMaybeAuth<
+  ReqParams = {},
+  ReqBody = undefined,
+  ResBody = undefined,
+> extends RequestWithMaybeACUC<ReqParams, ReqBody, ResBody> {
+  auth?: { team_id: string };
+  account?: { remainingCredits: number };
+}
+
+export interface ResponseWithSentry<ResBody = undefined>
+  extends Response<ResBody> {
+  sentry?: string;
+}
+
+export type AuthCreditUsageChunk = any;
+export type AuthCreditUsageChunkFromTeam = any;
+
+export type ScrapeOptionsV1 = ScrapeOptions;

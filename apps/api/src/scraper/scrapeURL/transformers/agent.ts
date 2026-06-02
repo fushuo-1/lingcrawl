@@ -1,4 +1,4 @@
-import { Document } from "../../../controllers/types-shared";
+import { Document } from "../../../controllers/types";
 import { Meta } from "..";
 
 export async function performAgent(

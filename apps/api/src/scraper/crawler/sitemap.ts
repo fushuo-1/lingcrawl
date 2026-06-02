@@ -14,6 +14,11 @@ import { promisify } from "node:util";
 import { SitemapError } from "../../lib/error";
 import { useIndex } from "../../services";
 
+// Stub for removed CostTracking
+class CostTracking {
+  toJSON() { return {}; }
+}
+
 const useFireEngine =
   config.FIRE_ENGINE_BETA_URL !== "" &&
   config.FIRE_ENGINE_BETA_URL !== undefined;

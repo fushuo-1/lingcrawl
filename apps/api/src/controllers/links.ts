@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-import { logger as _logger } from "../../lib/logger";
+import { logger as _logger } from "../lib/logger";
 import { extractLinks } from "../scraper/scrapeURL/lib/extractLinks";
-import { scrapeURLWithFetch } from "../scraper/scrapeURL/engines/fetch";
+import * as undici from "undici";
 
 interface LinksRequest {
   url: string;
@@ -22,21 +22,18 @@ export async function linksController(
     const parsed = new URL(url);
     const sourceOrigin = parsed.origin;
 
-    // Fetch the page using the fetch engine
-    const result = await scrapeURLWithFetch({
-      url,
-      logger,
-      featureFlags: new Set(),
-      options: {
-        formats: [{ type: "rawHtml" }],
-        headers: {},
-        waitFor: 0,
+    // Fetch the page directly using undici
+    const response = await undici.fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; LingCrawl/1.0)",
+        Accept: "text/html",
       },
-      internalOptions: {},
-      abort: new AbortController().signal,
-    } as any);
+    });
 
-    if (!result.html) {
+    const html = await response.text();
+
+    if (!html) {
       return res.status(200).json({
         success: true,
         data: { links: [], sourceURL: url },
@@ -44,7 +41,7 @@ export async function linksController(
     }
 
     // Extract links using the existing extractLinks function
-    const extractedUrls = await extractLinks(result.html, url);
+    const extractedUrls = await extractLinks(html, url);
 
     // Classify links as internal/external
     const links = extractedUrls
@@ -54,7 +51,7 @@ export async function linksController(
           const u = new URL(linkUrl);
           return {
             url: u.href,
-            type: u.origin === sourceOrigin ? "internal" as const : "external" as const,
+            type: u.origin === sourceOrigin ? ("internal" as const) : ("external" as const),
           };
         } catch {
           return {

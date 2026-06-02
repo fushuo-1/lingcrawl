@@ -15,3 +15,7 @@ export function captureExceptionWithZdrCheck(
     // Sentry may not be initialized
   }
 }
+
+export function setSentryServiceTag(service: string) {
+  // No-op in self-hosted mode
+}

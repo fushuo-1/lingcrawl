@@ -88,7 +88,7 @@ describe("Extract endpoint (free mode)", () => {
 describe("Summary endpoint", () => {
   const hasAI = !!(config.OPENAI_API_KEY || config.OLLAMA_BASE_URL);
 
-  it.skipIf(!hasAI)(
+  (hasAI ? it : it.skip)(
     "returns a summary for a page",
     async () => {
       const { status, data } = await apiPost("/v2/summary", {

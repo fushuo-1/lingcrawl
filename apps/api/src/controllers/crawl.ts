@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { config } from "../../config";
+import { config } from "../config";
 import { v7 as uuidv7 } from "uuid";
 import {
   CrawlRequest,
@@ -12,11 +12,11 @@ import {
   saveCrawl,
   StoredCrawl,
   markCrawlActive,
-} from "../../lib/crawl-redis";
-import { _addScrapeJobToBullMQ } from "../../services/queue-jobs";
-import { logger as _logger } from "../../lib/logger";
-import { crawlGroup } from "../../services/worker/nuq";
-import { logRequest } from "../../services/logging/log_job";
+} from "../lib/crawl-redis";
+import { _addScrapeJobToBullMQ } from "../services/queue-jobs";
+import { logger as _logger } from "../lib/logger";
+import { crawlGroup } from "../services/worker/nuq";
+import { logRequest } from "../services/logging/log_job";
 
 export async function crawlController(
   req: any,
@@ -128,7 +128,7 @@ export async function crawlController(
       webhook: req.body.webhook,
       v1: true,
       zeroDataRetention: zeroDataRetention || false,
-    },
+    } as any,
     uuidv7(),
   );
 

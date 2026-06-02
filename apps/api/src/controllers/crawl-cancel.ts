@@ -1,9 +1,9 @@
 import { Response } from "express";
-import { logger } from "../../lib/logger";
-import { getCrawl, saveCrawl } from "../../lib/crawl-redis";
+import { logger } from "../lib/logger";
+import { getCrawl, saveCrawl } from "../lib/crawl-redis";
 import * as Sentry from "@sentry/node";
 import { configDotenv } from "dotenv";
-import { crawlGroup } from "../../services/worker/nuq";
+import { crawlGroup } from "../services/worker/nuq";
 configDotenv();
 
 export async function crawlCancelController(

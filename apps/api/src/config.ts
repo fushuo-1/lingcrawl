@@ -67,6 +67,7 @@ const configSchema = z.object({
   NUQ_WORKER_START_PORT: z.coerce.number().default(3006),
   NUQ_WORKER_COUNT: z.coerce.number().default(5),
   NUQ_PREFETCH_WORKER_PORT: z.coerce.number().default(3011).catch(3011),
+  NUQ_PREFETCH_WORKER_HEARTBEAT_URL: z.string().optional(),
   NUQ_RECONCILER_WORKER_PORT: z.coerce.number().default(3012).catch(3012),
   EXTRACT_WORKER_PORT: z.coerce.number().default(3004),
   NUQ_WAIT_MODE: z.string().optional(),
@@ -96,6 +97,7 @@ const configSchema = z.object({
   SELF_HOSTED_WEBHOOK_HMAC_SECRET: z.string().optional(),
   DISABLE_WEBHOOK_DELIVERY: z.stringbool().optional(),
   ALLOW_LOCAL_WEBHOOKS: z.stringbool().optional(),
+  SLACK_WEBHOOK_URL: z.string().optional(),
 
   // LingCrawl Features
   LINGCRAWL_DEBUG_FILTER_LINKS: z.stringbool().optional(),
@@ -112,6 +114,15 @@ const configSchema = z.object({
   OLLAMA_BASE_URL: z.string().optional(),
   MODEL_NAME: z.string().optional(),
   MODEL_EMBEDDING_NAME: z.string().optional(),
+  VERTEX_CREDENTIALS: z.string().optional(),
+  PDF_RUST_EXTRACT_ENABLE: z.stringbool().optional(),
+  PDF_SHADOW_COMPARISON_ENABLE: z.stringbool().optional(),
+  RUNPOD_MU_API_KEY: z.string().optional(),
+  RUNPOD_MU_POD_ID: z.string().optional(),
+  PDF_MU_V2_EXPERIMENT: z.string().optional(),
+  PDF_MU_V2_BASE_URL: z.string().optional(),
+  PDF_MU_V2_EXPERIMENT_PERCENT: z.coerce.number().optional(),
+  PDF_MU_V2_API_KEY: z.string().optional(),
 
   // Concurrency & Performance
   NUM_WORKERS_PER_QUEUE: z.coerce.number().default(8),

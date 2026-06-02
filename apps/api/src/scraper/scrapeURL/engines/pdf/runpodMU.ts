@@ -48,7 +48,7 @@ export async function scrapePDFWithRunPodMU(
   if (
     config.PDF_MU_V2_EXPERIMENT === "true" &&
     config.PDF_MU_V2_BASE_URL &&
-    Math.random() * 100 < config.PDF_MU_V2_EXPERIMENT_PERCENT
+    Math.random() * 100 < (config.PDF_MU_V2_EXPERIMENT_PERCENT ?? 0)
   ) {
     (async () => {
       const pdfParseId = crypto.randomUUID();

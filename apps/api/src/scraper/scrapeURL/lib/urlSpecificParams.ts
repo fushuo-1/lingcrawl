@@ -1,5 +1,5 @@
 import { InternalOptions } from "..";
-import { ScrapeOptions } from "../../../controllers/types-shared";
+import { ScrapeOptions } from "../../../controllers/types";
 
 type UrlSpecificParams = {
   scrapeOptions: Partial<ScrapeOptions>;

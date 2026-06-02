@@ -6,10 +6,6 @@ import http from "http";
 import https from "https";
 
 import { logger as _logger } from "../../lib/logger";
-import {
-  concurrentJobDone,
-  pushConcurrencyLimitActiveJob,
-} from "../../lib/concurrency-limit";
 import { addJobPriority, deleteJobPriority } from "../../lib/job-priority";
 import { cacheableLookup } from "../../scraper/scrapeURL/lib/cacheableLookup";
 import { v7 as uuidv7 } from "uuid";
@@ -76,6 +72,14 @@ import {
 import { ScrapeUrlResponse } from "../../scraper/scrapeURL";
 import { logScrape } from "../logging/log_job";
 import { FeatureFlag } from "../../scraper/scrapeURL/engines";
+
+// Stubs for removed billing/cost tracking
+class CostTracking {
+  toJSON() { return {}; }
+}
+async function calculateCreditsToBeBilled(...args: any[]): Promise<number> {
+  return 0;
+}
 
 configDotenv();
 
@@ -416,7 +420,6 @@ async function processJob(job: NuQJob<ScrapeJobSingleUrls>) {
                     requestId: job.data.requestId,
                     billing: job.data.billing,
                     webhook: job.data.webhook,
-                    v1: job.data.v1,
                     zeroDataRetention: job.data.zeroDataRetention,
                     apiKeyId: job.data.apiKeyId,
                   },
@@ -486,7 +489,6 @@ async function processJob(job: NuQJob<ScrapeJobSingleUrls>) {
           time_taken: timeTakenInSeconds,
           team_id: job.data.team_id,
           options: job.data.scrapeOptions,
-          cost_tracking: costTracking.toJSON(),
           pdf_num_pages: doc.metadata.numPages,
           credits_cost: credits_billed ?? 0,
           zeroDataRetention: job.data.zeroDataRetention,
@@ -494,36 +496,6 @@ async function processJob(job: NuQJob<ScrapeJobSingleUrls>) {
         },
         true,
       );
-
-      if (job.data.v1) {
-        const sender = await createWebhookSender({
-          teamId: job.data.team_id,
-          jobId: job.data.crawl_id,
-          webhook: job.data.webhook,
-          v0: false,
-        });
-        if (sender) {
-          logger.debug("Calling webhook with success...", {
-            webhook: job.data.webhook,
-          });
-          const documents = Array.isArray(data?.result?.links)
-            ? data.result.links.map(x => x.content)
-            : [];
-          if (job.data.crawlerOptions !== null) {
-            sender.send(WebhookEvent.CRAWL_PAGE, {
-              success: true,
-              data: documents,
-              scrapeId: job.id,
-            });
-          } else {
-            sender.send(WebhookEvent.BATCH_SCRAPE_PAGE, {
-              success: true,
-              data: documents,
-              scrapeId: job.id,
-            });
-          }
-        }
-      }
 
       logger.debug("Declaring job as done...");
       await addCrawlJobDone(job.data.crawl_id, job.id, true, logger);
@@ -556,7 +528,6 @@ async function processJob(job: NuQJob<ScrapeJobSingleUrls>) {
           time_taken: timeTakenInSeconds,
           team_id: job.data.team_id,
           options: job.data.scrapeOptions,
-          cost_tracking: costTracking.toJSON(),
           pdf_num_pages: doc.metadata.numPages,
           credits_cost: credits_billed ?? 0,
           zeroDataRetention: job.data.zeroDataRetention,
@@ -657,7 +628,7 @@ async function processJob(job: NuQJob<ScrapeJobSingleUrls>) {
         teamId: job.data.team_id,
         jobId: (job.data.crawl_id ?? job.id) as string,
         webhook: job.data.webhook,
-        v0: Boolean(!job.data.v1),
+        v0: false,
       });
 
       // at this point we don't have a document, send a minimal payload to let users identify the errored URL
@@ -719,7 +690,6 @@ async function processJob(job: NuQJob<ScrapeJobSingleUrls>) {
         time_taken: timeTakenInSeconds,
         team_id: job.data.team_id,
         options: job.data.scrapeOptions,
-        cost_tracking: costTracking.toJSON(),
         credits_cost: credits_billed ?? 0,
         zeroDataRetention: job.data.zeroDataRetention,
         skipNuq: job.data.skipNuq ?? false,
@@ -806,7 +776,6 @@ async function addKickoffSitemapJob(
       requestId: sourceJob.data.requestId,
       billing: sourceJob.data.billing,
       webhook: sourceJob.data.webhook,
-      v1: sourceJob.data.v1,
       apiKeyId: sourceJob.data.apiKeyId,
     } satisfies ScrapeJobKickoffSitemap,
     jobId,
@@ -859,7 +828,6 @@ async function processKickoffJob(job: NuQJob<ScrapeJobKickoff>) {
         requestId: job.data.requestId,
         billing: job.data.billing,
         webhook: job.data.webhook,
-        v1: job.data.v1,
         isCrawlSourceScrape: true,
         zeroDataRetention: job.data.zeroDataRetention,
         apiKeyId: job.data.apiKeyId,
@@ -878,7 +846,7 @@ async function processKickoffJob(job: NuQJob<ScrapeJobKickoff>) {
         teamId: job.data.team_id,
         jobId: job.data.crawl_id,
         webhook: job.data.webhook,
-        v0: Boolean(!job.data.v1),
+        v0: false,
       });
       if (sender) {
         sender.send(WebhookEvent.CRAWL_STARTED, { success: true });
@@ -948,7 +916,6 @@ async function processKickoffJob(job: NuQJob<ScrapeJobKickoff>) {
             billing: job.data.billing,
             sitemapped: true,
             webhook: job.data.webhook,
-            v1: job.data.v1,
             zeroDataRetention: job.data.zeroDataRetention,
             apiKeyId: job.data.apiKeyId,
           },
@@ -1061,7 +1028,6 @@ async function processKickoffSitemapJob(job: NuQJob<ScrapeJobKickoffSitemap>) {
           billing: job.data.billing,
           sitemapped: true,
           webhook: job.data.webhook,
-          v1: job.data.v1,
           zeroDataRetention:
             job.data.zeroDataRetention || (sc.zeroDataRetention ?? false),
           apiKeyId: job.data.apiKeyId,
@@ -1145,23 +1111,7 @@ export const processJobInternal = async (job: NuQJob<ScrapeJobData>) => {
 
 async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
   try {
-    try {
-      let extendLockInterval: NodeJS.Timeout | null = null;
-      if (
-        job.data?.mode !== "kickoff" &&
-        job.data?.team_id &&
-        !job.data.skipNuq
-      ) {
-        extendLockInterval = setInterval(async () => {
-          await pushConcurrencyLimitActiveJob(
-            job.data.team_id,
-            job.id,
-            60 * 1000,
-          ); // 60s lock renew, just like in the queue
-        }, jobLockExtendInterval);
-      }
-
-      await addJobPriority(job.data.team_id, job.id);
+    await addJobPriority(job.data.team_id, job.id);
       try {
         if (job.data.mode === "kickoff") {
           const result = await processKickoffJob(
@@ -1212,15 +1162,7 @@ async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
         }
       } finally {
         await deleteJobPriority(job.data.team_id, job.id);
-        if (extendLockInterval) {
-          clearInterval(extendLockInterval);
-        }
       }
-    } finally {
-      if (!job.data.skipNuq) {
-        await concurrentJobDone(job);
-      }
-    }
   } catch (error) {
     logger.warn("Job failed", { error });
 

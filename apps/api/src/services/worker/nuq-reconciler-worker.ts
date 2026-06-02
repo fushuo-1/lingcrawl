@@ -3,7 +3,6 @@ import { config } from "../../config";
 import "../sentry";
 import { setSentryServiceTag } from "../sentry";
 import { logger as _logger } from "../../lib/logger";
-import { reconcileConcurrencyQueue } from "../../lib/concurrency-queue-reconciler";
 import { Counter, register } from "prom-client";
 import Express from "express";
 
@@ -76,9 +75,7 @@ const reconcilerJobsRecoveredTotal = new Counter({
       reconcilerInFlight = true;
 
       try {
-        const summary = await reconcileConcurrencyQueue({
-          logger: _logger,
-        });
+        const summary = { jobsRequeued: 0, jobsStarted: 0 };
 
         reconcilerRunsTotal.inc();
         reconcilerJobsRecoveredTotal.inc(

@@ -4,12 +4,17 @@ import {
   ScrapeOptions,
   Document as V2Document,
   TeamFlags,
+  webhookSchema,
 } from "./controllers/types";
-// AuthCreditUsageChunk stub (v1 removed)
+// AuthCreditUsageChunk stub
 type AuthCreditUsageChunk = any;
 import { ExtractorOptions, Document } from "./lib/entities";
 import { InternalOptions } from "./scraper/scrapeURL";
 import { SerializedTraceContext } from "./lib/otel-tracer";
+
+// Stubs for removed billing/cost tracking types
+type BillingMetadata = any;
+type CostTracking = any;
 
 type ScrapeJobCommon = {
   concurrencyLimited?: boolean;
@@ -39,7 +44,6 @@ type ScrapeJobSingleUrlsUnique = {
   crawl_id?: string;
   sitemapped?: boolean;
   webhook?: z.infer<typeof webhookSchema>;
-  v1?: boolean;
   integration?: string | null;
 
   /**
@@ -69,7 +73,6 @@ type ScrapeJobKickoffUnique = {
   integration?: string | null;
   crawl_id: string;
   webhook?: z.infer<typeof webhookSchema>;
-  v1: boolean;
   apiKeyId: number | null;
 };
 
@@ -84,7 +87,6 @@ type ScrapeJobKickoffSitemapUnique = {
   origin: string;
   integration?: string | null;
   webhook?: z.infer<typeof webhookSchema>;
-  v1: boolean;
   apiKeyId: number | null;
 };
 

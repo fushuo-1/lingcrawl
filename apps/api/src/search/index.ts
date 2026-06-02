@@ -1,4 +1,4 @@
-import { SearchV2Response, SearchResultType } from "../../lib/entities";
+import { SearchV2Response, SearchResultType } from "../lib/entities";
 import { Logger } from "winston";
 import { searxng_search } from "./searxng";
 

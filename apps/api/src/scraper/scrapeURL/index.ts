@@ -22,6 +22,12 @@ import {
 } from "./engines";
 import { parseMarkdown } from "../../lib/html-to-markdown";
 import { hasFormatOfType } from "../../lib/format-utils";
+import { captureExceptionWithZdrCheck } from "../../services/sentry";
+
+// Stub for removed CostTracking
+class CostTracking {
+  toJSON() { return {}; }
+}
 import {
   ActionError,
   AddFeatureError,

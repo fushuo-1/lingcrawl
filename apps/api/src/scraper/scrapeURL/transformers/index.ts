@@ -13,6 +13,11 @@ import {
 } from "./llmExtract";
 import { uploadScreenshot } from "./uploadScreenshot";
 import { removeBase64Images } from "./removeBase64Images";
+
+// Stub for removed indexer queue
+const indexerQueue = {
+  sendToWorker: async (...args: any[]) => {},
+};
 import { performAgent } from "./agent";
 import { performAttributes } from "./performAttributes";
 
@@ -506,7 +511,7 @@ const transformerStack: Transformer[] = [
   deriveDiff,
   coerceFieldsToFormats,
   removeBase64Images,
-];
+] as Transformer[];
 
 export async function executeTransformers(
   meta: Meta,

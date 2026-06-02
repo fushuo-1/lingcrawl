@@ -1,17 +1,17 @@
 import { Response } from "express";
-import { config } from "../../config";
+import { config } from "../config";
 import {
   SearchRequest,
   SearchResponse,
   searchRequestSchema,
 } from "./types";
 import { v7 as uuidv7 } from "uuid";
-import { logSearch, logRequest } from "../../services/logging/log_job";
-import { logger as _logger } from "../../lib/logger";
-import { ScrapeJobTimeoutError } from "../../lib/error";
+import { logSearch, logRequest } from "../services/logging/log_job";
+import { logger as _logger } from "../lib/logger";
+import { ScrapeJobTimeoutError } from "../lib/error";
 import { z } from "zod";
-import { CategoryOption } from "../../lib/search-query-builder";
-import { executeSearch } from "../../search/execute";
+import { CategoryOption } from "../lib/search-query-builder";
+import { executeSearch } from "../search/execute";
 
 export async function searchController(
   req: any,
@@ -78,7 +78,6 @@ export async function searchController(
         requestId: jobId,
         bypassBilling: true,
         zeroDataRetention: false,
-        billing: { endpoint: "search" as const, jobId },
       },
       logger,
     );

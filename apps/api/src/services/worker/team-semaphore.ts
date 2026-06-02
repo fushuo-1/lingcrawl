@@ -1,7 +1,3 @@
-import {
-  pushConcurrencyLimitActiveJob,
-  removeConcurrencyLimitActiveJob,
-} from "../../lib/concurrency-limit";
 import { isSelfHosted } from "../../lib/deployment";
 import { ScrapeJobTimeoutError, TransportableError } from "../../lib/error";
 import { logger as _logger } from "../../lib/logger";
@@ -143,15 +139,6 @@ function startHeartbeat(teamId: string, holderId: string, intervalMs: number) {
   const promise = (async () => {
     try {
       while (!stopped) {
-        await pushConcurrencyLimitActiveJob(teamId, holderId, 60 * 1000).catch(
-          () => {
-            _logger.warn("Failed to update concurrency limit active job", {
-              teamId,
-              jobId: holderId,
-            });
-          },
-        );
-
         const ok = await heartbeat(teamId, holderId);
         if (!ok) {
           throw new TransportableError("SCRAPE_TIMEOUT", "heartbeat_failed");
@@ -204,18 +191,9 @@ async function withSemaphore<T>(
 
   activeSemaphores.inc();
   try {
-    await pushConcurrencyLimitActiveJob(teamId, holderId, 60 * 1000);
-
     const result = await Promise.race([func(limited), hb.promise]);
     return result;
   } finally {
-    await removeConcurrencyLimitActiveJob(teamId, holderId).catch(() => {
-      _logger.warn("Failed to remove concurrency limit active job", {
-        teamId,
-        jobId: holderId,
-      });
-    });
-
     activeSemaphores.dec();
     hb.stop();
     endTimer();

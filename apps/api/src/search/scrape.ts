@@ -10,7 +10,6 @@ import { SearchV2Response } from "../lib/entities";
 
 export interface DocumentWithCostTracking {
   document: Document;
-  costTracking: ReturnType<typeof CostTracking.prototype.toJSON>;
 }
 
 interface ScrapeJobInput {
@@ -34,7 +33,6 @@ interface ScrapeSearchOptions {
   apiKeyId: number | null;
   zeroDataRetention?: boolean;
   requestId?: string;
-  billing?: BillingMetadata;
 }
 
 async function scrapeSearchResultDirect(
@@ -83,7 +81,6 @@ async function scrapeSearchResultDirect(
         zeroDataRetention,
         apiKeyId: options.apiKeyId,
         requestId: options.requestId,
-        billing: options.billing,
       },
     };
 
@@ -105,10 +102,7 @@ async function scrapeSearchResultDirect(
       },
     };
 
-    return {
-      document,
-      costTracking: new CostTracking().toJSON(),
-    };
+    return { document };
   } catch (error) {
     logger.error(`Error in scrapeSearchResultDirect: ${error}`, {
       url: searchResult.url,
@@ -127,10 +121,7 @@ async function scrapeSearchResultDirect(
       },
     };
 
-    return {
-      document,
-      costTracking: new CostTracking().toJSON(),
-    };
+    return { document };
   }
 }
 

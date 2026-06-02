@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { config } from "../../config";
+import { config } from "../config";
 import { v7 as uuidv7 } from "uuid";
 import {
   BatchScrapeRequest,
@@ -17,15 +17,15 @@ import {
   markCrawlActive,
   saveCrawl,
   StoredCrawl,
-} from "../../lib/crawl-redis";
-import { getJobPriority } from "../../lib/job-priority";
-import { addScrapeJobs } from "../../services/queue-jobs";
-import { logger as _logger } from "../../lib/logger";
-import { UNSUPPORTED_SITE_MESSAGE } from "../../lib/strings";
-import { isUrlBlocked } from "../../scraper/WebScraper/utils/blocklist";
-import { crawlGroup } from "../../services/worker/nuq";
-import { logRequest } from "../../services/logging/log_job";
-import { createWebhookSender, WebhookEvent } from "../../services/webhook/index";
+} from "../lib/crawl-redis";
+import { getJobPriority } from "../lib/job-priority";
+import { addScrapeJobs } from "../services/queue-jobs";
+import { logger as _logger } from "../lib/logger";
+import { UNSUPPORTED_SITE_MESSAGE } from "../lib/strings";
+import { isUrlBlocked } from "../scraper/WebScraper/utils/blocklist";
+import { crawlGroup } from "../services/worker/nuq";
+import { logRequest } from "../services/logging/log_job";
+import { createWebhookSender, WebhookEvent } from "../services/webhook/index";
 
 export async function batchScrapeController(
   req: any,
@@ -203,7 +203,7 @@ export async function batchScrapeController(
     logger,
   );
   logger.debug("Adding scrape jobs to BullMQ...");
-  await addScrapeJobs(jobs);
+  await addScrapeJobs(jobs as any);
 
   if (req.body.webhook) {
     logger.debug("Calling webhook with batch_scrape.started...", {

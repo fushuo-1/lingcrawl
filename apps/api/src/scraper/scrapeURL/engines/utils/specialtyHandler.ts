@@ -1,6 +1,5 @@
 import { Logger } from "winston";
 import { AddFeatureError } from "../../error";
-import { FireEngineCheckStatusSuccess } from "../fire-engine/checkStatus";
 import path from "path";
 import os from "os";
 import { writeFile } from "fs/promises";
@@ -8,7 +7,7 @@ import { Meta } from "../..";
 
 async function feResToFilePrefetch(
   logger: Logger,
-  feRes: FireEngineCheckStatusSuccess | undefined,
+  feRes: any | undefined,
   fileExtension: string,
   fileType: string,
   contentType?: string,
@@ -35,14 +34,14 @@ async function feResToFilePrefetch(
 
 async function feResToPdfPrefetch(
   logger: Logger,
-  feRes: FireEngineCheckStatusSuccess | undefined,
+  feRes: any | undefined,
 ): Promise<Meta["pdfPrefetch"]> {
   return feResToFilePrefetch(logger, feRes, "pdf", "pdf");
 }
 
 async function feResToDocumentPrefetch(
   logger: Logger,
-  feRes: FireEngineCheckStatusSuccess | undefined,
+  feRes: any | undefined,
   contentType: string,
 ): Promise<Meta["documentPrefetch"]> {
   // Determine file extension from content type
@@ -70,7 +69,7 @@ async function feResToDocumentPrefetch(
 export async function specialtyScrapeCheck(
   logger: Logger,
   headers: Record<string, string> | undefined,
-  feRes?: FireEngineCheckStatusSuccess,
+  feRes?: any,
 ) {
   const contentType = (Object.entries(headers ?? {}).find(
     x => x[0].toLowerCase() === "content-type",

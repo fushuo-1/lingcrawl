@@ -1,6 +1,6 @@
 import { Response } from "express";
-import { config } from "../../config";
-import { logger as _logger } from "../../lib/logger";
+import { config } from "../config";
+import { logger as _logger } from "../lib/logger";
 import {
   Document,
   FormatObject,
@@ -9,15 +9,15 @@ import {
   ScrapeResponse,
 } from "./types";
 import { v7 as uuidv7 } from "uuid";
-import { hasFormatOfType } from "../../lib/format-utils";
-import { TransportableError } from "../../lib/error";
-import { NuQJob } from "../../services/worker/nuq";
-import { withSpan, setSpanAttributes, SpanKind } from "../../lib/otel-tracer";
-import { processJobInternal } from "../../services/worker/scrape-worker";
-import { ScrapeJobData } from "../../types";
-import { teamConcurrencySemaphore } from "../../services/worker/team-semaphore";
-import { logRequest } from "../../services/logging/log_job";
-import { getErrorContactMessage } from "../../lib/deployment";
+import { hasFormatOfType } from "../lib/format-utils";
+import { TransportableError } from "../lib/error";
+import { NuQJob } from "../services/worker/nuq";
+import { withSpan, setSpanAttributes, SpanKind } from "../lib/otel-tracer";
+import { processJobInternal } from "../services/worker/scrape-worker";
+import { ScrapeJobData } from "../types";
+import { teamConcurrencySemaphore } from "../services/worker/team-semaphore";
+import { logRequest } from "../services/logging/log_job";
+import { getErrorContactMessage } from "../lib/deployment";
 import { Request } from "express";
 
 export async function scrapeController(

@@ -13,6 +13,7 @@ import {
 } from "../../error";
 import { open, readFile, unlink } from "node:fs/promises";
 import type { Response } from "undici";
+import { captureExceptionWithZdrCheck } from "../../../../services/sentry";
 import { AbortManagerThrownError } from "../../lib/abortManager";
 import {
   shouldParsePDF,

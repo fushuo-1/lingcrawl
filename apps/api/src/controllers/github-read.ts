@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { logger as _logger } from "../../lib/logger";
+import { logger as _logger } from "../lib/logger";
 
 interface GitHubReadRequest {
   url: string;

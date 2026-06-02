@@ -12,6 +12,7 @@
     "outDir": "./dist/src",
     "moduleResolution": "NodeNext",
     "strictNullChecks": true,
+    "isolatedModules": true,
 
     "inlineSources": true,
 
@@ -31,5 +32,9 @@
     "utils/EventEmmitter.ts",
     "src/services/queue-service.ts",
     "src/types/x402.d.ts"
+  ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/__tests__/**"
   ]
 }

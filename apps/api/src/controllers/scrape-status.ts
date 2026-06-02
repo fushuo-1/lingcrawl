@@ -1,5 +1,5 @@
 import { getJob } from "./crawl-status";
-import { logger as _logger } from "../../lib/logger";
+import { logger as _logger } from "../lib/logger";
 
 export async function scrapeStatusController(req: any, res: any) {
   const uuidReg =

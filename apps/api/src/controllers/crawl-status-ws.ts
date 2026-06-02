@@ -6,18 +6,18 @@ import {
 } from "./types";
 import { WebSocket } from "ws";
 import { v7 as uuidv7 } from "uuid";
-import { logger } from "../../lib/logger";
+import { logger } from "../lib/logger";
 import {
   getCrawl,
   getCrawlError,
   getCrawlExpiry,
   getCrawlJobs,
   getDoneJobsOrdered,
-} from "../../lib/crawl-redis";
+} from "../lib/crawl-redis";
 import { getJobs, PseudoJob } from "./crawl-status";
 import * as Sentry from "@sentry/node";
-import { scrapeQueue, NuQJobStatus } from "../../services/worker/nuq";
-import { getErrorContactMessage } from "../../lib/deployment";
+import { scrapeQueue, NuQJobStatus } from "../services/worker/nuq";
+import { getErrorContactMessage } from "../lib/deployment";
 
 type ErrorMessage = {
   type: "error";

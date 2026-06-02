@@ -1,5 +1,5 @@
 import type { Logger } from "winston";
-import { search } from "./v2";
+import { search } from "./index";
 import { SearchV2Response } from "../lib/entities";
 import {
   buildSearchQuery,
@@ -37,7 +37,6 @@ interface SearchContext {
   requestId: string;
   bypassBilling?: boolean;
   zeroDataRetention?: boolean;
-  billing?: BillingMetadata;
 }
 
 interface SearchExecuteResult {
@@ -63,7 +62,6 @@ export async function executeSearch(
     requestId,
     bypassBilling,
     zeroDataRetention,
-    billing,
   } = context;
 
   const num_results_buffer = Math.floor(limit * 2);
@@ -129,10 +127,7 @@ export async function executeSearch(
     totalResultsCount += searchResponse.news.length;
   }
 
-  const isZDR = options.enterprise?.includes("zdr");
-  const creditsPerTenResults = isZDR ? 10 : 2;
-  const searchCredits =
-    Math.ceil(totalResultsCount / 10) * creditsPerTenResults;
+  const searchCredits = 0;
   let scrapeCredits = 0;
 
   const shouldScrape =
@@ -151,7 +146,6 @@ export async function executeSearch(
         apiKeyId,
         zeroDataRetention,
         requestId,
-        billing,
       };
 
       const allDocsWithCostTracking = await scrapeSearchResults(

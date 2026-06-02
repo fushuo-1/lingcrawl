@@ -1,8 +1,11 @@
 name: lingcrawl
 
 x-common-service: &common-service
-  image: ghcr.io/lingcrawl/lingcrawl
-  # build: apps/api
+  build:
+    context: apps/api
+    args:
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+  # image: ghcr.io/lingcrawl/lingcrawl
   ulimits:
     nofile:
       soft: 65535
@@ -35,8 +38,6 @@ x-common-env: &common-env
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
   GITHUB_TOKEN: ${GITHUB_TOKEN}
   BULL_AUTH_KEY: ${BULL_AUTH_KEY}
-  SELF_HOSTED_WEBHOOK_URL: ${SELF_HOSTED_WEBHOOK_URL}
-  SELF_HOSTED_WEBHOOK_HMAC_SECRET: ${SELF_HOSTED_WEBHOOK_HMAC_SECRET}
   LOGGING_LEVEL: ${LOGGING_LEVEL}
   PROXY_SERVER: ${PROXY_SERVER}
   PROXY_USERNAME: ${PROXY_USERNAME}
@@ -47,14 +48,13 @@ x-common-env: &common-env
 
 services:
   playwright-service:
-    image: ghcr.io/lingcrawl/playwright-service:latest
-    # build: apps/playwright-service-ts
+    build: apps/playwright-service-ts
+    # image: ghcr.io/lingcrawl/playwright-service:latest
     environment:
       PORT: 3000
       PROXY_SERVER: ${PROXY_SERVER}
       PROXY_USERNAME: ${PROXY_USERNAME}
       PROXY_PASSWORD: ${PROXY_PASSWORD}
-      ALLOW_LOCAL_WEBHOOKS: ${ALLOW_LOCAL_WEBHOOKS}
       BLOCK_MEDIA: ${BLOCK_MEDIA}
       MAX_CONCURRENT_PAGES: ${CRAWL_CONCURRENT_REQUESTS:-10}
     ports:

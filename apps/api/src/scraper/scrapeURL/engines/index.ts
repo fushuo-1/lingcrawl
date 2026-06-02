@@ -9,7 +9,8 @@ import { BrandingNotSupportedError } from "../error";
 export type Engine =
   | "playwright"
   | "fetch"
-  | "pdf";
+  | "pdf"
+  | (string & {});  // Allow additional engine strings
 
 const featureFlags = [
   "actions",

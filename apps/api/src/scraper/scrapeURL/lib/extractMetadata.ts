@@ -1,5 +1,5 @@
 import { load } from "cheerio"; // rustified
-import { Document } from "../../../controllers/types-shared";
+import { Document } from "../../../controllers/types";
 import { Meta } from "..";
 import { extractMetadata as _extractMetadata } from "@lingcrawl/lingcrawl-rs";
 

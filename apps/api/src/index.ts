@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { config } from "./config";
-import "./services/sentry";
+import { setSentryServiceTag } from "./services/sentry";
 import * as Sentry from "@sentry/node";
 import express, { NextFunction, Request, Response } from "express";
 import bodyParser from "body-parser";
@@ -20,9 +20,9 @@ import {
   ErrorResponse,
   RequestWithMaybeACUC,
   ResponseWithSentry,
-} from "./controllers/types-shared";
+} from "./controllers/types";
 import { ZodError } from "zod";
-import { QueueFullError } from "./lib/concurrency-limit";
+import { QueueFullError } from "./services/queue-jobs";
 import { v7 as uuidv7 } from "uuid";
 import { cacheableLookup } from "./scraper/scrapeURL/lib/cacheableLookup";
 import { nuqShutdown } from "./services/worker/nuq";
@@ -97,7 +97,7 @@ app.get("/health/liveness", (_, res) => res.status(200).json({ status: "ok" }));
 app.get("/health/readiness", (_, res) => res.status(200).json({ status: "ok" }));
 
 // register router
-app.use("/api", apiRouter); // /api prefix
+app.use("/api", apiRouter);
 app.use(adminRouter);
 
 const DEFAULT_PORT = config.PORT;
@@ -115,7 +115,6 @@ async function startServer(port = DEFAULT_PORT) {
   }
 
   // Attach WebSocket proxy to the Express app
-  attachWsProxy(app);
 
   const server = app.listen(Number(port), HOST, () => {
     logger.info(`Worker ${process.pid} listening on port ${port}`);
@@ -128,16 +127,11 @@ async function startServer(port = DEFAULT_PORT) {
       logger.info("Waiting 60s for GCE load balancer drain timeout");
       await new Promise(resolve => setTimeout(resolve, 60000));
     }
-    server.close(() => {
+    server.close(async () => {
       logger.info("Server closed.");
-      nuqShutdown().finally(() => {
-        shutdownWebhookQueue().finally(() => {
-          shutdownIndexerQueue().finally(() => {
-            logger.info("NUQ shutdown complete");
-            process.exit(0);
-          });
-        });
-      });
+      await nuqShutdown();
+      logger.info("NUQ shutdown complete");
+      process.exit(0);
     });
   };
 
@@ -250,3 +244,4 @@ app.use(
 );
 
 logger.info(`Worker ${process.pid} started`);
+        "Unrecognized key in body -- please review the API documentation for request body changes";

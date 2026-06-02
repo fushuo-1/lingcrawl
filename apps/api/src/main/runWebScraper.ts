@@ -5,6 +5,9 @@ import { scrapeURL, ScrapeUrlResponse } from "../scraper/scrapeURL";
 import type { NuQJob } from "../services/worker/nuq";
 configDotenv();
 
+// Stub for removed CostTracking
+type CostTracking = any;
+
 export async function startWebScraperPipeline({
   job,
   costTracking,

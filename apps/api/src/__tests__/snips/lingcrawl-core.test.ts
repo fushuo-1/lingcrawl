@@ -57,7 +57,7 @@ describe("Map endpoint", () => {
 describe("Search endpoint", () => {
   const hasSearch = !!config.SEARXNG_ENDPOINT;
 
-  it.skipIf(!hasSearch)(
+  (hasSearch ? it : it.skip)(
     "returns search results",
     async () => {
       const { status, data } = await apiPost("/v2/search", {

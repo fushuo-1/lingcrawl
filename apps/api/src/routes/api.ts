@@ -13,7 +13,6 @@ import { crawlStatusWSController } from "../controllers/crawl-status-ws";
 import { githubReadController } from "../controllers/github-read";
 import { linksController } from "../controllers/links";
 import { extractController } from "../controllers/extract";
-import { summaryController } from "../controllers/summary";
 import {
   blocklistMiddleware,
   idempotencyMiddleware,
@@ -70,6 +69,3 @@ apiRouter.post("/links", wrap(linksController));
 
 // Extract (dual mode: fulltext or LLM)
 apiRouter.post("/extract", wrap(extractController));
-
-// Summary (requires LLM)
-apiRouter.post("/summary", wrap(summaryController));

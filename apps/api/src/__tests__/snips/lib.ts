@@ -2,7 +2,7 @@ import { configDotenv } from "dotenv";
 import { config } from "../../config";
 configDotenv();
 
-import { TeamFlags } from "../../controllers/types-shared";
+import { TeamFlags } from "../../controllers/types";
 
 // =========================================
 // Configuration

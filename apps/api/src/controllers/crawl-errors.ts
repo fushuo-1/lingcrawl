@@ -3,13 +3,13 @@ import {
   CrawlErrorsResponse,
   CrawlStatusParams,
 } from "./types";
-import { getCrawl, getCrawlJobs } from "../../lib/crawl-redis";
-import { redisEvictConnection } from "../../../src/services/redis";
+import { getCrawl, getCrawlJobs } from "../lib/crawl-redis";
+import { redisEvictConnection } from "../../src/services/redis";
 import { configDotenv } from "dotenv";
-import { logger as _logger } from "../../lib/logger";
-import { deserializeTransportableError } from "../../lib/error-serde";
-import { TransportableError } from "../../lib/error";
-import { scrapeQueue } from "../../services/worker/nuq";
+import { logger as _logger } from "../lib/logger";
+import { deserializeTransportableError } from "../lib/error-serde";
+import { TransportableError } from "../lib/error";
+import { scrapeQueue } from "../services/worker/nuq";
 configDotenv();
 
 export async function crawlErrorsController(

@@ -2,8 +2,9 @@ import { Logger } from "winston";
 import { z, ZodError } from "zod";
 import * as Sentry from "@sentry/node";
 import { MockState, saveMock } from "./mock";
-import { fireEngineURL } from "../engines/fire-engine/scrape";
 import { fetch, Response, FormData, Agent } from "undici";
+
+const fireEngineURL = "https://fire-engine.placeholder";
 import { cacheableLookup } from "./cacheableLookup";
 import dns from "dns";
 import { AbortManagerThrownError } from "./abortManager";

@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { config } from "../../config";
+import { config } from "../config";
 import {
   CrawlStatusParams,
   CrawlStatusResponse,
@@ -9,18 +9,18 @@ import {
   getCrawl,
   getCrawlError,
   getCrawlExpiry,
-} from "../../lib/crawl-redis";
-import { logger } from "../../lib/logger";
-import { getJobFromGCS } from "../../lib/gcs-jobs";
+} from "../lib/crawl-redis";
+import { logger } from "../lib/logger";
+import { getJobFromGCS } from "../lib/gcs-jobs";
 import {
   scrapeQueue,
   NuQJob,
   NuQJobStatus,
   crawlGroup,
-} from "../../services/worker/nuq";
-import { ScrapeJobSingleUrls } from "../../types";
-import { redisEvictConnection } from "../../services/redis";
-import { isBaseDomain, extractBaseDomain } from "../../lib/url-utils";
+} from "../services/worker/nuq";
+import { ScrapeJobSingleUrls } from "../types";
+import { redisEvictConnection } from "../services/redis";
+import { isBaseDomain, extractBaseDomain } from "../lib/url-utils";
 import { Request } from "express";
 
 export type PseudoJob<T> = {
