@@ -1,6 +1,6 @@
 import { Meta } from "../..";
 import { config } from "../../../../config";
-import { EngineScrapeResult } from "..";
+import { EngineScrapeResult, registerEngine } from "..";
 import * as marked from "marked";
 import { downloadFile, fetchFileToBuffer } from "../utils/downloadFile";
 import {
@@ -453,3 +453,26 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
 export function pdfMaxReasonableTime(meta: Meta): number {
   return 120000; // Infinity, really
 }
+
+registerEngine({
+  name: "pdf",
+  handler: scrapePDF,
+  maxReasonableTime: pdfMaxReasonableTime,
+  features: {
+    actions: false,
+    waitFor: false,
+    screenshot: false,
+    "screenshot@fullScreen": false,
+    pdf: true,
+    document: false,
+    atsv: false,
+    location: false,
+    mobile: false,
+    skipTlsVerification: false,
+    useFastMode: true,
+    stealthProxy: true,
+    branding: false,
+    disableAdblock: true,
+  },
+  quality: -20,
+});

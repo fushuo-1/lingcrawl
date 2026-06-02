@@ -1,5 +1,5 @@
 import * as undici from "undici";
-import { EngineScrapeResult } from "..";
+import { EngineScrapeResult, registerEngine } from "..";
 import { Meta } from "../..";
 import { SSLError } from "../../error";
 import { specialtyScrapeCheck } from "../utils/specialtyHandler";
@@ -123,3 +123,26 @@ export async function scrapeURLWithFetch(
 export function fetchMaxReasonableTime(meta: Meta): number {
   return 15000;
 }
+
+registerEngine({
+  name: "fetch",
+  handler: scrapeURLWithFetch,
+  maxReasonableTime: fetchMaxReasonableTime,
+  features: {
+    actions: false,
+    waitFor: false,
+    screenshot: false,
+    "screenshot@fullScreen": false,
+    pdf: false,
+    document: false,
+    atsv: false,
+    location: false,
+    mobile: false,
+    skipTlsVerification: true,
+    useFastMode: true,
+    stealthProxy: false,
+    branding: false,
+    disableAdblock: false,
+  },
+  quality: 5,
+});
