@@ -59,3 +59,4 @@ target/
 # local files
 _local/
 .claude/
+docker-dist/
