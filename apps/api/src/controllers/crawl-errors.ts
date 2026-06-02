@@ -10,12 +10,13 @@ import { logger as _logger } from "../lib/logger";
 import { deserializeTransportableError } from "../lib/error-serde";
 import { TransportableError } from "../lib/error";
 import { scrapeQueue } from "../services/worker/nuq";
+import { withErrorHandler } from "./error-wrapper";
 configDotenv();
 
-export async function crawlErrorsController(
+export const crawlErrorsController = withErrorHandler(async (
   req: any,
   res: Response<CrawlErrorsResponse>,
-) {
+) => {
   const sc = await getCrawl(req.params.jobId);
 
   if (sc) {
@@ -69,4 +70,4 @@ export async function crawlErrorsController(
   } else {
     return res.status(404).json({ success: false, error: "Job not found" });
   }
-}
+});

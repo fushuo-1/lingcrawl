@@ -26,11 +26,12 @@ import { isUrlBlocked } from "../scraper/WebScraper/utils/blocklist";
 import { crawlGroup } from "../services/worker/nuq";
 import { logRequest } from "../services/logging/log_job";
 import { createWebhookSender, WebhookEvent } from "../services/webhook/index";
+import { withErrorHandler } from "./error-wrapper";
 
-export async function batchScrapeController(
+export const batchScrapeController = withErrorHandler(async (
   req: any,
   res: Response<BatchScrapeResponse>,
-) {
+) => {
   const preNormalizedBody = { ...req.body };
   if (req.body?.ignoreInvalidURLs === true) {
     req.body = batchScrapeRequestSchemaNoURLValidation.parse(req.body);
@@ -226,4 +227,4 @@ export async function batchScrapeController(
     url: `${protocol}://${req.get("host")}/batch/scrape/${id}`,
     invalidURLs,
   });
-}
+});

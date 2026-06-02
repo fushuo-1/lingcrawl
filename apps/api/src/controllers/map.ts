@@ -11,13 +11,14 @@ import { MapTimeoutError } from "../lib/error";
 import { getMapResults, MapResult } from "../lib/map-utils";
 import { v7 as uuidv7 } from "uuid";
 import { isBaseDomain, extractBaseDomain } from "../lib/url-utils";
+import { withErrorHandler } from "./error-wrapper";
 
 configDotenv();
 
-export async function mapController(
+export const mapController = withErrorHandler(async (
   req: any,
   res: Response<MapResponse>,
-) {
+) => {
   const logger = _logger.child({
     jobId: uuidv7(),
     teamId: "local",
@@ -92,16 +93,6 @@ export async function mapController(
           ]
         : []),
     ])) as any;
-  } catch (error) {
-    if (error instanceof MapTimeoutError) {
-      return res.status(408).json({
-        success: false,
-        code: error.code,
-        error: error.message,
-      });
-    } else {
-      throw error;
-    }
   } finally {
     if (timeoutHandle) {
       clearTimeout(timeoutHandle);
@@ -163,4 +154,4 @@ export async function mapController(
   };
 
   return res.status(200).json(response);
-}
+});

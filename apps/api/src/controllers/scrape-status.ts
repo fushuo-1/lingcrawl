@@ -1,7 +1,8 @@
 import { getJob } from "./crawl-status";
 import { logger as _logger } from "../lib/logger";
+import { withErrorHandler } from "./error-wrapper";
 
-export async function scrapeStatusController(req: any, res: any) {
+export const scrapeStatusController = withErrorHandler(async (req: any, res: any) => {
   const uuidReg =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!req.params.jobId || !uuidReg.test(req.params.jobId)) {
@@ -34,4 +35,4 @@ export async function scrapeStatusController(req: any, res: any) {
     success: true,
     data,
   });
-}
+});

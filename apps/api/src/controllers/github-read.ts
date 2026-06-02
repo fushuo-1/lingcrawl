@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { logger as _logger } from "../lib/logger";
+import { withErrorHandler } from "./error-wrapper";
 
 interface GitHubReadRequest {
   url: string;
@@ -40,10 +41,10 @@ async function githubFetch(path: string, ref?: string) {
   return res.json();
 }
 
-export async function githubReadController(
+export const githubReadController = withErrorHandler(async (
   req: Request<{}, any, GitHubReadRequest>,
   res: Response,
-) {
+) => {
   const logger = _logger.child({
     method: "githubReadController",
   });
@@ -135,4 +136,4 @@ export async function githubReadController(
       error: `GitHub API error: ${error}`,
     });
   }
-}
+});

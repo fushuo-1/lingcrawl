@@ -11,19 +11,20 @@ import {
 import { v7 as uuidv7 } from "uuid";
 import { hasFormatOfType } from "../lib/format-utils";
 import { TransportableError } from "../lib/error";
+import { withErrorHandler } from "./error-wrapper";
 import { NuQJob } from "../services/worker/nuq";
 import { withSpan, setSpanAttributes, SpanKind } from "../lib/otel-tracer";
 import { processJobInternal } from "../services/worker/scrape-worker";
 import { ScrapeJobData } from "../types";
 import { teamConcurrencySemaphore } from "../services/worker/team-semaphore";
 import { logRequest } from "../services/logging/log_job";
-import { getErrorContactMessage } from "../lib/deployment";
+
 import { Request } from "express";
 
-export async function scrapeController(
+export const scrapeController = withErrorHandler(async (
   req: Request<{}, ScrapeResponse, ScrapeRequest>,
   res: Response<ScrapeResponse>,
-) {
+) => {
   return withSpan(
     "api.scrape.request",
     async span => {
@@ -179,47 +180,12 @@ export async function scrapeController(
           },
         );
       } catch (e) {
-        const timeoutErr =
-          e instanceof TransportableError && e.code === "SCRAPE_TIMEOUT";
-
         setSpanAttributes(span, {
           "scrape.error": e instanceof Error ? e.message : String(e),
           "scrape.error_type":
             e instanceof TransportableError ? e.code : "unknown",
         });
-
-        if (e instanceof TransportableError) {
-          if (!timeoutErr) {
-            logger.error(`Error in scrapeController`, {
-              version: "v2",
-              error: e,
-            });
-          }
-          if (e.code === "SCRAPE_DNS_RESOLUTION_ERROR") {
-            return res.status(200).json({ success: false, code: e.code, error: e.message });
-          }
-          if (e.code === "SCRAPE_NO_CACHED_DATA") {
-            return res.status(404).json({ success: false, code: e.code, error: e.message });
-          }
-          if (e.code === "SCRAPE_ACTIONS_NOT_SUPPORTED") {
-            return res.status(400).json({ success: false, code: e.code, error: e.message });
-          }
-          const statusCode = e.code === "SCRAPE_TIMEOUT" ? 408 : 500;
-          return res.status(statusCode).json({ success: false, code: e.code, error: e.message });
-        } else {
-          const id = uuidv7();
-          logger.error(`Error in scrapeController`, {
-            version: "v2",
-            error: e,
-            errorId: id,
-            path: req.path,
-          });
-          return res.status(500).json({
-            success: false,
-            code: "UNKNOWN_ERROR",
-            error: getErrorContactMessage(id),
-          });
-        }
+        throw e;
       } finally {
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
@@ -301,4 +267,4 @@ export async function scrapeController(
       kind: SpanKind.SERVER,
     },
   );
-}
+});

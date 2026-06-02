@@ -2,82 +2,72 @@ import { Request, Response } from "express";
 import { logger as _logger } from "../lib/logger";
 import { extractLinks } from "../scraper/scrapeURL/lib/extractLinks";
 import * as undici from "undici";
+import { withErrorHandler } from "./error-wrapper";
 
 interface LinksRequest {
   url: string;
 }
 
-export async function linksController(
+export const linksController = withErrorHandler(async (
   req: Request<{}, any, LinksRequest>,
   res: Response,
-) {
-  const logger = _logger.child({ method: "linksController" });
+) => {
   const { url } = req.body;
 
   if (!url) {
     return res.status(400).json({ success: false, error: "url is required" });
   }
 
-  try {
-    const parsed = new URL(url);
-    const sourceOrigin = parsed.origin;
+  const parsed = new URL(url);
+  const sourceOrigin = parsed.origin;
 
-    // Fetch the page directly using undici
-    const response = await undici.fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; LingCrawl/1.0)",
-        Accept: "text/html",
-      },
-    });
+  // Fetch the page directly using undici
+  const response = await undici.fetch(url, {
+    method: "GET",
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; LingCrawl/1.0)",
+      Accept: "text/html",
+    },
+  });
 
-    const html = await response.text();
+  const html = await response.text();
 
-    if (!html) {
-      return res.status(200).json({
-        success: true,
-        data: { links: [], sourceURL: url },
-      });
-    }
-
-    // Extract links using the existing extractLinks function
-    const extractedUrls = await extractLinks(html, url);
-
-    // Classify links as internal/external
-    const links = extractedUrls
-      .filter(linkUrl => linkUrl && linkUrl.startsWith("http"))
-      .map(linkUrl => {
-        try {
-          const u = new URL(linkUrl);
-          return {
-            url: u.href,
-            type: u.origin === sourceOrigin ? ("internal" as const) : ("external" as const),
-          };
-        } catch {
-          return {
-            url: linkUrl,
-            type: "external" as const,
-          };
-        }
-      });
-
+  if (!html) {
     return res.status(200).json({
       success: true,
-      data: {
-        links,
-        sourceURL: url,
-        total: links.length,
-        internal: links.filter(l => l.type === "internal").length,
-        external: links.filter(l => l.type === "external").length,
-      },
-    });
-  } catch (e) {
-    const error = e instanceof Error ? e.message : String(e);
-    logger.error("Links extraction failed", { error, url });
-
-    return res.status(500).json({
-      success: false,
-      error: `Failed to extract links: ${error}`,
+      data: { links: [], sourceURL: url },
     });
   }
-}
+
+  // Extract links using the existing extractLinks function
+  const extractedUrls = await extractLinks(html, url);
+
+  // Classify links as internal/external
+  const links = extractedUrls
+    .filter(linkUrl => linkUrl && linkUrl.startsWith("http"))
+    .map(linkUrl => {
+      try {
+        const u = new URL(linkUrl);
+        return {
+          url: u.href,
+          type: u.origin === sourceOrigin ? ("internal" as const) : ("external" as const),
+        };
+      } catch {
+        return {
+          url: linkUrl,
+          type: "external" as const,
+        };
+      }
+    });
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      links,
+      sourceURL: url,
+      total: links.length,
+      internal: links.filter(l => l.type === "internal").length,
+      external: links.filter(l => l.type === "external").length,
+    },
+  });
+});

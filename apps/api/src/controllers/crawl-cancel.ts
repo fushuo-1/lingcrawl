@@ -4,12 +4,13 @@ import { getCrawl, saveCrawl } from "../lib/crawl-redis";
 import * as Sentry from "@sentry/node";
 import { configDotenv } from "dotenv";
 import { crawlGroup } from "../services/worker/nuq";
+import { withErrorHandler } from "./error-wrapper";
 configDotenv();
 
-export async function crawlCancelController(
+export const crawlCancelController = withErrorHandler(async (
   req: any,
   res: Response,
-) {
+) => {
   try {
     const sc = await getCrawl(req.params.jobId);
     if (!sc) {
@@ -37,7 +38,6 @@ export async function crawlCancelController(
     });
   } catch (error) {
     Sentry.captureException(error);
-    logger.error(error);
-    return res.status(500).json({ error: error.message });
+    throw error;
   }
-}
+});

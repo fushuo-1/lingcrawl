@@ -17,11 +17,12 @@ import { _addScrapeJobToBullMQ } from "../services/queue-jobs";
 import { logger as _logger } from "../lib/logger";
 import { crawlGroup } from "../services/worker/nuq";
 import { logRequest } from "../services/logging/log_job";
+import { withErrorHandler } from "./error-wrapper";
 
-export async function crawlController(
+export const crawlController = withErrorHandler(async (
   req: any,
   res: Response<CrawlResponse>,
-) {
+) => {
   req.body = crawlRequestSchema.parse(req.body);
 
   const zeroDataRetention = req.body.zeroDataRetention ?? false;
@@ -139,4 +140,4 @@ export async function crawlController(
     id,
     url: `${protocol}://${req.get("host")}/crawl/${id}`,
   });
-}
+});

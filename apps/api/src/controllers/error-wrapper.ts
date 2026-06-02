@@ -14,6 +14,7 @@ const errorCodeToStatusCode: Partial<Record<ErrorCodes, number>> = {
   CRAWL_DENIAL: 403,
   SCRAPE_TIMEOUT: 408,
   MAP_TIMEOUT: 408,
+  SCRAPE_DNS_RESOLUTION_ERROR: 200,
 };
 
 function statusCodeForError(error: TransportableError): number {
@@ -21,7 +22,7 @@ function statusCodeForError(error: TransportableError): number {
 }
 
 export function withErrorHandler(
-  handler: (req: Request, res: Response) => Promise<void>,
+  handler: (req: Request, res: Response) => Promise<any>,
 ): (req: Request, res: Response) => Promise<void> {
   return async (req: Request, res: Response) => {
     try {
@@ -39,13 +40,13 @@ export function withErrorHandler(
           },
         });
       } else if (error instanceof TransportableError) {
-        res.status(statusCodeForError(error)).json({
+        const statusCode = statusCodeForError(error);
+        const body: any = {
           success: false,
-          error: {
-            message: error.message,
-            code: error.code,
-          },
-        });
+          error: error.message,
+          code: error.code,
+        };
+        res.status(statusCode).json(body);
       } else if (
         error instanceof Error &&
         error.message?.includes("timeout")

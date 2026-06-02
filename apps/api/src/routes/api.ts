@@ -4,7 +4,7 @@ import { searchController } from "../controllers/search";
 import { scrapeController } from "../controllers/scrape";
 import { batchScrapeController } from "../controllers/batch-scrape";
 import { crawlController } from "../controllers/crawl";
-import { crawlStatusController } from "../controllers/crawl-status";
+import { crawlStatusController, batchCrawlStatusController } from "../controllers/crawl-status";
 import { mapController } from "../controllers/map";
 import { crawlErrorsController } from "../controllers/crawl-errors";
 import { scrapeStatusController } from "../controllers/scrape-status";
@@ -37,7 +37,7 @@ apiRouter.get("/scrape/:jobId", validateJobIdParam, wrap(scrapeStatusController)
 
 // Batch Scrape
 apiRouter.post("/batch/scrape", blocklistMiddleware, wrap(batchScrapeController));
-apiRouter.get("/batch/scrape/:jobId", validateJobIdParam, wrap((req: any, res: any) => crawlStatusController(req, res, true)));
+apiRouter.get("/batch/scrape/:jobId", validateJobIdParam, wrap(batchCrawlStatusController));
 apiRouter.delete("/batch/scrape/:jobId", validateJobIdParam, wrap(crawlCancelController));
 apiRouter.get("/batch/scrape/:jobId/errors", wrap(crawlErrorsController));
 

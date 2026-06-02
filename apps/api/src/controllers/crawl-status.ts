@@ -22,6 +22,7 @@ import { ScrapeJobSingleUrls } from "../types";
 import { redisEvictConnection } from "../services/redis";
 import { isBaseDomain, extractBaseDomain } from "../lib/url-utils";
 import { Request } from "express";
+import { withErrorHandler } from "./error-wrapper";
 
 export type PseudoJob<T> = {
   id: string;
@@ -122,11 +123,11 @@ export async function getJobs(
   return jobs;
 }
 
-export async function crawlStatusController(
-  req: Request<CrawlStatusParams, CrawlStatusResponse, undefined>,
-  res: Response<CrawlStatusResponse>,
-  isBatch = false,
-) {
+function crawlStatusHandler(isBatch: boolean) {
+  return withErrorHandler(async (
+    req: Request<CrawlStatusParams, CrawlStatusResponse, undefined>,
+    res: Response<CrawlStatusResponse>,
+  ) => {
   const uuidReg =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!req.params.jobId || !uuidReg.test(req.params.jobId)) {
@@ -300,4 +301,8 @@ export async function crawlStatusController(
     data: outputBulkB.data,
     ...(warning && { warning }),
   });
+  });
 }
+
+export const crawlStatusController = crawlStatusHandler(false);
+export const batchCrawlStatusController = crawlStatusHandler(true);
