@@ -16,7 +16,6 @@ import {
 import { gunzip } from "node:zlib";
 import { promisify } from "node:util";
 import { fetchFileToBuffer } from "../scrapeURL/engines/utils/downloadFile";
-import { useIndex } from "../../services";
 
 const useFireEngine =
   config.FIRE_ENGINE_BETA_URL !== "" &&
@@ -83,7 +82,7 @@ export async function getLinksFromSitemap(
           location && mode === "fire-engine" && useFireEngine;
 
         const forceEngine: Engine[] = [
-          ...(maxAge > 0 && useIndex ? ["index" as const] : []),
+          // index engine removed with index service
           ...(shouldPrioritizeFireEngine
             ? [
                 "fire-engine;tlsclient" as const,

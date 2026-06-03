@@ -34,7 +34,6 @@ describe("buildSyncScrapeJob", () => {
     // internalOptions
     const io = job.data.internalOptions!;
     expect(io.teamId).toBe("local");
-    expect(io.saveScrapeResultToGCS).toBe(false);
     expect(io.bypassBilling).toBe(true);
     expect(io.zeroDataRetention).toBe(false);
     expect(io.teamFlags).toBeNull();
@@ -95,7 +94,6 @@ describe("buildSyncScrapeJob", () => {
 
     // Verify internalOptions shape
     expect(job.data.internalOptions).toHaveProperty("teamId");
-    expect(job.data.internalOptions).toHaveProperty("saveScrapeResultToGCS");
     expect(job.data.internalOptions).toHaveProperty("unnormalizedSourceURL");
     expect(job.data.internalOptions).toHaveProperty("bypassBilling");
     expect(job.data.internalOptions).toHaveProperty("zeroDataRetention");

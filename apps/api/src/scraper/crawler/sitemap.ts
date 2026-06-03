@@ -12,7 +12,6 @@ import { fetchFileToBuffer } from "../scrapeURL/engines/utils/downloadFile";
 import { gunzip } from "node:zlib";
 import { promisify } from "node:util";
 import { SitemapError } from "../../lib/error";
-import { useIndex } from "../../services";
 
 const useFireEngine =
   config.FIRE_ENGINE_BETA_URL !== "" &&
@@ -52,7 +51,7 @@ async function getSitemapXML(options: SitemapScrapeOptions): Promise<string> {
     options.location && options.location.country !== "us-generic";
 
   const forceEngine: Engine[] = [
-    ...(options.maxAge > 0 && useIndex ? ["index" as const] : []),
+    // index engine removed with index service
     ...(isLocationSpecified && useFireEngine
       ? [
           "fire-engine;tlsclient" as const,

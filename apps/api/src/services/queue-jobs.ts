@@ -12,7 +12,6 @@ import { logger as _logger } from "../lib/logger";
 import { sendNotificationWithCustomDays } from "./notification/email_notification";
 import { shouldSendConcurrencyLimitNotification } from "./notification/notification-check";
 import { getACUCTeam } from "../controllers/auth";
-import { getJobFromGCS, removeJobFromGCS } from "../lib/gcs-jobs";
 import { Document } from "../controllers/types";
 import { getCrawl } from "../lib/crawl-redis";
 import { Logger } from "winston";
@@ -20,7 +19,6 @@ import { ScrapeJobTimeoutError, TransportableError } from "../lib/error";
 import { deserializeTransportableError } from "../lib/error-serde";
 import { abTestJob } from "./ab-test";
 import { NuQJob, scrapeQueue } from "./worker/nuq";
-import { serializeTraceContext } from "../lib/otel-tracer";
 import { isSelfHosted } from "../lib/deployment";
 
 /**
@@ -254,15 +252,8 @@ export async function addScrapeJob(
   directToBullMQ: boolean = false,
   listenable: boolean = false,
 ): Promise<NuQJob<ScrapeJobData> | null> {
-  // Capture trace context to propagate to worker
-  const traceContext = serializeTraceContext();
-  const optionsWithTrace: ScrapeJobData = {
-    ...webScraperOptions,
-    traceContext,
-  };
-
   return await addScrapeJobRaw(
-    optionsWithTrace,
+    webScraperOptions,
     jobId,
     priority,
     directToBullMQ,
@@ -279,9 +270,6 @@ export async function addScrapeJobs(
   }[],
 ) {
   if (jobs.length === 0) return true;
-
-  // Capture trace context for all jobs
-  const traceContext = serializeTraceContext();
 
   const jobsByTeam = new Map<
     string,
@@ -439,7 +427,7 @@ export async function addScrapeJobs(
     await _addScrapeJobsToConcurrencyQueue(
       addToCQ.map(job => ({
         jobId: job.jobId,
-        data: { ...job.data, traceContext },
+        data: job.data,
         priority: job.priority,
         listenable: job.listenable,
       })),
@@ -448,7 +436,7 @@ export async function addScrapeJobs(
     await _addScrapeJobsToBullMQ(
       addToBull.map(job => ({
         jobId: job.jobId,
-        data: { ...job.data, traceContext },
+        data: job.data,
         priority: job.priority,
         listenable: job.listenable,
       })),
@@ -513,16 +501,7 @@ export async function waitForJob(
   logger.debug("Got job");
 
   if (!doc) {
-    const docs = await getJobFromGCS(jobId);
-    logger.debug("Got job from GCS");
-    if (!docs || docs.length === 0) {
-      throw new Error("Job not found in GCS");
-    }
-    doc = docs[0]!;
-
-    if (zeroDataRetention) {
-      await removeJobFromGCS(jobId);
-    }
+    throw new Error("Job not found");
   }
 
   return doc;

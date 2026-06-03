@@ -7,30 +7,14 @@ configDotenv({ path: path.resolve(__dirname, "..", "..", "..", ".env"), override
 
 import { z } from "zod";
 
-/* Codecs */
-const delimitedList = (separator = ",") => {
-  return z.codec(z.string(), z.array(z.string()), {
-    decode: str => str ? str.split(separator).map(s => s.trim()) : [],
-    encode: arr => arr.join(separator),
-  });
-};
-
 /* Schema */
 const configSchema = z.object({
+  
   // Application
   ENV: z.string().optional(),
   HOST: z.string().default("localhost"),
   PORT: z.coerce.number().default(3002),
   LOGGING_LEVEL: z.string().optional(),
-
-  // Express
-  EXPRESS_TRUST_PROXY: z.coerce.number().optional(),
-
-  // API Keys
-  BULL_AUTH_KEY: z.string().optional(),
-  OPENAI_API_KEY: z.string().optional(),
-  OPENAI_BASE_URL: z.string().optional(),
-  OPENROUTER_API_KEY: z.string().optional(),
 
   // Database & Storage
   POSTGRES_HOST: z.string().default("localhost"),
@@ -44,13 +28,6 @@ const configSchema = z.object({
   NUQ_DATABASE_URL: z.string().optional(),
   NUQ_DATABASE_URL_LISTEN: z.string().optional(),
   NUQ_RABBITMQ_URL: z.string().optional(),
-
-  // Google Cloud Storage (optional)
-  GCS_BUCKET_NAME: z.string().optional(),
-  GCS_CREDENTIALS: z.string().optional(),
-  GCS_FIRE_ENGINE_BUCKET_NAME: z.string().optional(),
-  GCS_INDEX_BUCKET_NAME: z.string().optional(),
-  GCS_MEDIA_BUCKET_NAME: z.string().optional(),
 
   // ScrapeURL
   SCRAPEURL_ENGINE_WATERFALL_DELAY_MS: z.coerce.number().default(0),
@@ -81,100 +58,34 @@ const configSchema = z.object({
   // Harness Configuration
   HARNESS_STARTUP_TIMEOUT_MS: z.coerce.number().default(60000),
 
-  // Job & Lock Management
-  JOB_LOCK_EXTEND_INTERVAL: z.coerce.number().default(10000),
-  JOB_LOCK_EXTENSION_TIME: z.coerce.number().default(60000),
-  WORKER_LOCK_DURATION: z.coerce.number().default(60000),
-  WORKER_STALLED_CHECK_INTERVAL: z.coerce.number().default(30000),
-  CONNECTION_MONITOR_INTERVAL: z.coerce.number().default(10),
-  CANT_ACCEPT_CONNECTION_INTERVAL: z.coerce.number().default(2000),
-
   // Proxy
   PROXY_SERVER: z.string().optional(),
   PROXY_USERNAME: z.string().optional(),
   PROXY_PASSWORD: z.string().optional(),
 
-  // External Services
-  PLAYWRIGHT_MICROSERVICE_URL: z.string().optional(),
-  HTML_TO_MARKDOWN_SERVICE_URL: z.string().optional(),
+  // SSRF / Local Network Access
+  ALLOW_LOCAL_NETWORK: z.stringbool().optional(),
 
-  // Webhooks
-  SELF_HOSTED_WEBHOOK_URL: z.string().optional(),
-  SELF_HOSTED_WEBHOOK_HMAC_SECRET: z.string().optional(),
-  DISABLE_WEBHOOK_DELIVERY: z.stringbool().optional(),
-  ALLOW_LOCAL_WEBHOOKS: z.stringbool().optional(),
-  SLACK_WEBHOOK_URL: z.string().optional(),
+  // GitHub
+  GITHUB_TOKEN: z.string().optional(),
 
   // LingCrawl Features
-  LINGCRAWL_DEBUG_FILTER_LINKS: z.stringbool().optional(),
   LINGCRAWL_LOG_TO_FILE: z.stringbool().optional(),
-  LINGCRAWL_SAVE_MOCKS: z.stringbool().optional(),
-  LINGCRAWL_INDEX_WRITE_ONLY: z.stringbool().optional(),
-  DISABLE_BLOCKLIST: z.stringbool().optional(),
   FORCED_ENGINE_DOMAINS: z.string().optional(),
-  DISABLE_ENGPICKER: z.stringbool().optional(),
   USE_GO_MARKDOWN_PARSER: z.stringbool().optional(),
-  DEBUG_BRANDING: z.stringbool().optional(),
-
-  // AI/ML
-  OLLAMA_BASE_URL: z.string().optional(),
-  MODEL_NAME: z.string().optional(),
-  MODEL_EMBEDDING_NAME: z.string().optional(),
-  VERTEX_CREDENTIALS: z.string().optional(),
-  PDF_RUST_EXTRACT_ENABLE: z.stringbool().optional(),
-  PDF_SHADOW_COMPARISON_ENABLE: z.stringbool().optional(),
-  RUNPOD_MU_API_KEY: z.string().optional(),
-  RUNPOD_MU_POD_ID: z.string().optional(),
-  PDF_MU_V2_EXPERIMENT: z.string().optional(),
-  PDF_MU_V2_BASE_URL: z.string().optional(),
-  PDF_MU_V2_EXPERIMENT_PERCENT: z.coerce.number().optional(),
-  PDF_MU_V2_API_KEY: z.string().optional(),
-
-  // Concurrency & Performance
-  NUM_WORKERS_PER_QUEUE: z.coerce.number().default(8),
-  CRAWL_CONCURRENT_REQUESTS: z.coerce.number().default(10),
-  MAX_CONCURRENT_JOBS: z.coerce.number().default(5),
-  BROWSER_POOL_SIZE: z.coerce.number().default(5),
-
-  // Deprecated but still referenced in code (safe to leave empty)
-  USE_DB_AUTHENTICATION: z.stringbool().optional(),
-  STRIPE_SECRET_KEY: z.string().optional(),
-  AUTUMN_SECRET_KEY: z.string().optional(),
-  RESEND_API_KEY: z.string().optional(),
-  SUPABASE_URL: z.string().optional(),
-  SUPABASE_ANON_TOKEN: z.string().optional(),
-  SUPABASE_SERVICE_TOKEN: z.string().optional(),
-  SUPABASE_REPLICA_URL: z.string().optional(),
-  INDEX_SUPABASE_URL: z.string().optional(),
-  INDEX_SUPABASE_SERVICE_TOKEN: z.string().optional(),
-  SEARCH_INDEX_SUPABASE_URL: z.string().optional(),
-  FIRE_ENGINE_BETA_URL: z.string().optional(),
-  FIRE_ENGINE_STAGING_URL: z.string().optional(),
-  INDEXER_RABBITMQ_URL: z.string().optional(),
-  INDEXER_TRAFFIC_SHARE: z.coerce.number().default(0.0),
-  BACKGROUND_INDEX_TEAM_ID: z.string().optional(),
-  AGENT_INTEROP_SECRET: z.string().optional(),
-  IS_PRODUCTION: z.stringbool().optional(),
-  IS_KUBERNETES: z.stringbool().optional(),
-  LINGCRAWL_APP_HOST: z.string().default("lingcrawl-app-service"),
-  LINGCRAWL_APP_PORT: z.string().default("3002"),
-  LINGCRAWL_APP_SCHEME: z.string().default("http"),
-  SEARCH_PREVIEW_TOKEN: z.string().optional(),
-  PREVIEW_TOKEN: z.string().optional(),
-  SEARCH_SERVICE_API_SECRET: z.string().optional(),
-  AUTUMN_EXPERIMENT: z.string().optional(),
-  AUTUMN_EXPERIMENT_PERCENT: z.coerce.number().default(100),
+  PLAYWRIGHT_MICROSERVICE_URL: z.string().optional(),
 
   // System
   MAX_CPU: z.coerce.number().default(0.8),
   MAX_RAM: z.coerce.number().default(0.8),
   SYS_INFO_MAX_CACHE_DURATION: z.coerce.number().default(150),
 
-  // Sentry (optional error tracking)
-  SENTRY_DSN: z.string().optional(),
-  SENTRY_TRACE_SAMPLE_RATE: z.coerce.number().default(0.01),
-  SENTRY_ERROR_SAMPLE_RATE: z.coerce.number().default(0.05),
-  SENTRY_ENVIRONMENT: z.string().default("production"),
+  // Deployment environment
+  IS_PRODUCTION: z.stringbool().optional(),
+  IS_KUBERNETES: z.stringbool().optional(),
+  FIRE_ENGINE_BETA_URL: z.string().optional(),
+  SEARCH_PREVIEW_TOKEN: z.string().optional(),
+
   NUQ_POD_NAME: z.string().default("main"),
 
   // Testing
@@ -183,12 +94,6 @@ const configSchema = z.object({
   TEST_TEAM_ID: z.string().optional(),
   TEST_SUITE_SELF_HOSTED: z.stringbool().optional(),
   TEST_SUITE_WEBSITE: z.string().default("http://127.0.0.1:4321"),
-
-  // Miscellaneous
-  IDMUX_URL: z.string().optional(),
-  GITHUB_RUN_NUMBER: z.string().optional(),
-  GITHUB_REF_NAME: z.string().optional(),
-  RESTRICTED_COUNTRIES: delimitedList(",").optional(),
 });
 
 export const config = configSchema.parse(process.env);

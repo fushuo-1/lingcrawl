@@ -3,8 +3,6 @@ import { Meta } from "..";
 import { hasFormatOfType } from "../../../lib/format-utils";
 import { getPDFMaxPages } from "../../../controllers/types";
 import type { PdfMetadata } from "./pdf/types";
-import { BrandingProfile } from "../../../types/branding";
-import { BrandingNotSupportedError } from "../error";
 
 export type Engine =
   | "playwright"
@@ -25,7 +23,6 @@ const featureFlags = [
   "skipTlsVerification",
   "useFastMode",
   "stealthProxy",
-  "branding",
   "disableAdblock",
 ] as const;
 
@@ -62,7 +59,6 @@ const featureFlagOptions: {
   mobile: { priority: 10 },
   skipTlsVerification: { priority: 10 },
   stealthProxy: { priority: 20 },
-  branding: { priority: 20 },
   disableAdblock: { priority: 10 },
 } as const;
 
@@ -84,8 +80,6 @@ export type EngineScrapeResult = {
     }[];
     pdfs: string[];
   };
-
-  branding?: BrandingProfile;
 
   pdfMetadata?: PdfMetadata;
 
@@ -173,12 +167,6 @@ export async function buildFallbackList(meta: Meta): Promise<
   meta.logger.info("Selected engines", {
     selectedEngines,
   });
-
-  if (meta.featureFlags.has("branding")) {
-    throw new BrandingNotSupportedError(
-      "Branding extraction is not supported in the trimmed version.",
-    );
-  }
 
   return selectedEngines;
 }

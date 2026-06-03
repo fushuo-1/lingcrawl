@@ -43,7 +43,6 @@ export function buildSyncScrapeJob(
       scrapeOptions: opts.scrapeOptions,
       internalOptions: {
         teamId,
-        saveScrapeResultToGCS: false,
         unnormalizedSourceURL: opts.unnormalizedSourceURL ?? opts.url,
         bypassBilling: true,
         zeroDataRetention,

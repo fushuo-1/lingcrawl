@@ -72,7 +72,6 @@ if (
       skipTlsVerification: true,
       useFastMode: false,
       stealthProxy: false,
-      branding: false,
       disableAdblock: false,
     },
     quality: 20,

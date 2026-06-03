@@ -1,7 +1,5 @@
 import { Logger } from "winston";
 import { config } from "../../config";
-import * as Sentry from "@sentry/node";
-import { withSpan, setSpanAttributes } from "../../lib/otel-tracer";
 
 import {
   type Document,
@@ -22,7 +20,6 @@ import {
 } from "./engines";
 import { parseMarkdown } from "../../lib/html-to-markdown";
 import { hasFormatOfType } from "../../lib/format-utils";
-import { captureExceptionWithZdrCheck } from "../../services/sentry";
 
 import {
   ActionError,
@@ -48,16 +45,13 @@ import {
   EngineUnsuccessfulError,
   ProxySelectionError,
   ScrapeRetryLimitError,
-  BrandingNotSupportedError,
   WaterfallNextEngineSignal,
 } from "./error";
 import { ScrapeRetryTracker } from "./retryTracker";
 import { executeTransformers } from "./transformers";
-import { LLMRefusalError } from "./transformers/llmExtract";
 import { urlSpecificParams } from "./lib/urlSpecificParams";
 import { loadMock, MockState } from "./lib/mock";
 import { getEngineForUrl } from "../WebScraper/utils/engine-forcing";
-import { useIndex } from "../../services/index";
 import {
   fetchRobotsTxt,
   createRobotsChecker,
@@ -140,10 +134,6 @@ function buildFeatureFlags(
     } else {
       flags.add("screenshot");
     }
-  }
-
-  if (hasFormatOfType(options.formats, "branding")) {
-    flags.add("branding");
   }
 
   if (options.waitFor !== 0) {
@@ -306,7 +296,6 @@ export type InternalOptions = {
   urlInvisibleInCurrentCrawl?: boolean;
   unnormalizedSourceURL?: string;
 
-  saveScrapeResultToGCS?: boolean; // Passed along to fire-engine
   bypassBilling?: boolean;
   zeroDataRetention?: boolean;
   teamFlags?: TeamFlags;
@@ -453,15 +442,9 @@ class WrappedEngineError extends Error {
 }
 
 async function scrapeURLLoop(meta: Meta): Promise<ScrapeUrlResponse> {
-  return withSpan("scrape.engine_loop", async span => {
     meta.logger.info(
       `Scraping URL ${JSON.stringify(meta.rewrittenUrl ?? meta.url)}...`,
     );
-
-    setSpanAttributes(span, {
-      "engine.url": meta.rewrittenUrl ?? meta.url,
-      "engine.features": Array.from(meta.featureFlags).join(","),
-    });
 
     if (meta.internalOptions.zeroDataRetention) {
       if (meta.featureFlags.has("screenshot")) {
@@ -503,10 +486,6 @@ async function scrapeURLLoop(meta: Meta): Promise<ScrapeUrlResponse> {
         );
       }
     }
-
-    setSpanAttributes(span, {
-      "engine.fallback_list": fallbackList.map(f => f.engine).join(","),
-    });
 
     const snipeAbortController = new AbortController();
     const snipeAbort: AbortInstance = {
@@ -645,11 +624,6 @@ async function scrapeURLLoop(meta: Meta): Promise<ScrapeUrlResponse> {
               error.error instanceof NoCachedDataError
             ) {
               throw error.error;
-            } else if (error.error instanceof LLMRefusalError) {
-              meta.logger.warn("LLM refusal encountered", {
-                error: error.error,
-              });
-              throw error.error;
             } else if (error.error instanceof FEPageLoadFailed) {
               // This is the internal timeout bug on f-e and should be treated as an EngineError.
               meta.logger.warn("FEPageLoadFailed encountered", {
@@ -728,22 +702,8 @@ async function scrapeURLLoop(meta: Meta): Promise<ScrapeUrlResponse> {
     snipeAbortController.abort();
 
     if (result === null) {
-      setSpanAttributes(span, {
-        "engine.no_engines_left": true,
-        "engine.engines_attempted": enginesAttempted.join(","),
-      });
       throw new NoEnginesLeftError(fallbackList.map(x => x.engine));
     }
-
-    // Set winner engine attributes
-    setSpanAttributes(span, {
-      "engine.winner": result.engine,
-      "engine.engines_attempted": enginesAttempted.join(","),
-      "engine.unsupported_features":
-        result.unsupportedFeatures.size > 0
-          ? Array.from(result.unsupportedFeatures).join(",")
-          : undefined,
-    });
 
     meta.winnerEngine = result.engine;
     let engineResult: EngineScrapeResult = result.result;
@@ -783,7 +743,6 @@ async function scrapeURLLoop(meta: Meta): Promise<ScrapeUrlResponse> {
       rawHtml: engineResult.html,
       screenshot: engineResult.screenshot,
       actions: engineResult.actions,
-      branding: engineResult.branding,
       metadata: {
         sourceURL: meta.internalOptions.unnormalizedSourceURL ?? meta.url,
         url: engineResult.url,
@@ -827,22 +786,11 @@ async function scrapeURLLoop(meta: Meta): Promise<ScrapeUrlResponse> {
     // NOTE: for sitemap, we don't need all the transformers, need to skip unused ones
     document = await executeTransformers(meta, document);
 
-    // Set final span attributes
-    setSpanAttributes(span, {
-      "engine.final_status_code": document.metadata.statusCode,
-      "engine.final_url": document.metadata.url,
-      "engine.content_type": document.metadata.contentType,
-      "engine.proxy_used": document.metadata.proxyUsed,
-      "engine.cache_state": document.metadata.cacheState,
-      "engine.postprocessors_used": engineResult.postprocessorsUsed?.join(","),
-    });
-
     return {
       success: true,
       document,
       unsupportedFeatures: result.unsupportedFeatures,
     };
-  });
 }
 
 export async function scrapeURL(
@@ -851,117 +799,69 @@ export async function scrapeURL(
   options: ScrapeOptions,
   internalOptions: InternalOptions,
 ): Promise<ScrapeUrlResponse> {
-  return withSpan("scrape.pipeline", async span => {
-    const meta = await buildMetaObject(
-      id,
-      url,
-      options,
-      internalOptions,
-    );
+  const meta = await buildMetaObject(
+    id,
+    url,
+    options,
+    internalOptions,
+  );
 
-    const startTime = Date.now();
+  const startTime = Date.now();
 
-    // Set initial span attributes
-    setSpanAttributes(span, {
-      "scrape.id": id,
-      "scrape.url": url,
-      "scrape.team_id": internalOptions.teamId,
-      "scrape.crawl_id": internalOptions.crawlId,
-      "scrape.zero_data_retention": internalOptions.zeroDataRetention,
-      "scrape.force_engine": Array.isArray(internalOptions.forceEngine)
-        ? internalOptions.forceEngine.join(",")
-        : internalOptions.forceEngine,
-      "scrape.features": Array.from(meta.featureFlags).join(","),
-    });
-
-    meta.logger.info("scrapeURL entered");
+  meta.logger.info("scrapeURL entered");
 
     if (meta.rewrittenUrl) {
       meta.logger.info("Rewriting URL");
-      setSpanAttributes(span, {
-        "scrape.rewritten_url": meta.rewrittenUrl,
-      });
-    }
-
-    if (internalOptions.isPreCrawl === true) {
-      setSpanAttributes(span, {
-        "scrape.is_precrawl": true,
-      });
     }
 
     if (internalOptions.teamFlags?.checkRobotsOnScrape) {
-      await withSpan("scrape.robots_check", async robotsSpan => {
-        const urlToCheck = meta.rewrittenUrl || meta.url;
-        meta.logger.info("Checking robots.txt", { url: urlToCheck });
+      const urlToCheck = meta.rewrittenUrl || meta.url;
+      meta.logger.info("Checking robots.txt", { url: urlToCheck });
 
-        const urlObj = new URL(urlToCheck);
-        const isRobotsTxtPath = urlObj.pathname === "/robots.txt";
+      const urlObj = new URL(urlToCheck);
+      const isRobotsTxtPath = urlObj.pathname === "/robots.txt";
 
-        setSpanAttributes(robotsSpan, {
-          "robots.url": urlToCheck,
-          "robots.is_robots_txt_path": isRobotsTxtPath,
-        });
+      if (!isRobotsTxtPath) {
+        try {
+          let robotsTxt: string | undefined;
+          if (internalOptions.crawlId) {
+            const crawl = await getCrawl(internalOptions.crawlId);
+            robotsTxt = crawl?.robots;
+          }
 
-        if (!isRobotsTxtPath) {
-          try {
-            let robotsTxt: string | undefined;
-            if (internalOptions.crawlId) {
-              const crawl = await getCrawl(internalOptions.crawlId);
-              robotsTxt = crawl?.robots;
-            }
-
-            if (!robotsTxt) {
-              const { content } = await fetchRobotsTxt(
-                {
-                  url: urlToCheck,
-                  zeroDataRetention: internalOptions.zeroDataRetention || false,
-                  location: options.location,
-                },
-                id,
-                meta.logger,
-                meta.abort.asSignal(),
-              );
-              robotsTxt = content;
-            }
-
-            const checker = createRobotsChecker(urlToCheck, robotsTxt);
-            const isAllowed = isUrlAllowedByRobots(urlToCheck, checker.robots);
-
-            setSpanAttributes(robotsSpan, {
-              "robots.allowed": isAllowed,
-            });
-
-            if (!isAllowed) {
-              meta.logger.info("URL blocked by robots.txt", {
+          if (!robotsTxt) {
+            const { content } = await fetchRobotsTxt(
+              {
                 url: urlToCheck,
-              });
-              setSpanAttributes(span, {
-                "scrape.blocked_by_robots": true,
-              });
-              throw new CrawlDenialError("URL blocked by robots.txt");
-            }
-          } catch (error) {
-            if (error instanceof CrawlDenialError) {
-              throw error;
-            }
-            meta.logger.debug("Failed to fetch robots.txt, allowing scrape", {
-              error,
+                zeroDataRetention: internalOptions.zeroDataRetention || false,
+                location: options.location,
+              },
+              id,
+              meta.logger,
+              meta.abort.asSignal(),
+            );
+            robotsTxt = content;
+          }
+
+          const checker = createRobotsChecker(urlToCheck, robotsTxt);
+          const isAllowed = isUrlAllowedByRobots(urlToCheck, checker.robots);
+
+          if (!isAllowed) {
+            meta.logger.info("URL blocked by robots.txt", {
               url: urlToCheck,
             });
-            setSpanAttributes(robotsSpan, {
-              "robots.fetch_failed": true,
-            });
+            throw new CrawlDenialError("URL blocked by robots.txt");
           }
-        }
-      }).catch(error => {
-        if (error.message === "URL blocked by robots.txt") {
-          return {
-            success: false,
+        } catch (error) {
+          if (error instanceof CrawlDenialError) {
+            throw error;
+          }
+          meta.logger.debug("Failed to fetch robots.txt, allowing scrape", {
             error,
-          };
+            url: urlToCheck,
+          });
         }
-        throw error;
-      });
+      }
     }
 
     // Initialize retry tracker with configured limits
@@ -1071,42 +971,6 @@ export async function scrapeURL(
           result.success && result.document.metadata.cacheState === "hit",
       });
 
-      if (useIndex) {
-        meta.logger.debug("scrapeURL index metrics", {
-          module: "scrapeURL/index-metrics",
-          timeTaken: Date.now() - startTime,
-          changeTrackingEnabled: !!hasFormatOfType(
-            meta.options.formats,
-            "changeTracking",
-          ),
-          summaryEnabled: !!hasFormatOfType(meta.options.formats, "summary"),
-          jsonEnabled: !!hasFormatOfType(meta.options.formats, "json"),
-          screenshotEnabled: !!hasFormatOfType(
-            meta.options.formats,
-            "screenshot",
-          ),
-          imagesEnabled: !!hasFormatOfType(meta.options.formats, "images"),
-          brandingEnabled: !!hasFormatOfType(meta.options.formats, "branding"),
-          pdfMaxPages: getPDFMaxPages(meta.options.parsers),
-          maxAge: meta.options.maxAge,
-          headers: meta.options.headers
-            ? Object.keys(meta.options.headers).length
-            : 0,
-          actions: meta.options.actions?.length ?? 0,
-          proxy: meta.options.proxy,
-          success: result.success,
-          indexHit:
-            result.success && result.document.metadata.cacheState === "hit",
-        });
-      }
-
-      setSpanAttributes(span, {
-        "scrape.success": true,
-        "scrape.duration_ms": Date.now() - startTime,
-        "scrape.index_hit":
-          result.success && result.document.metadata.cacheState === "hit",
-      });
-
       return result;
     } catch (error) {
       meta.logger.debug("scrapeURL metrics", {
@@ -1118,75 +982,25 @@ export async function scrapeURL(
         indexHit: false,
       });
 
-      if (useIndex) {
-        meta.logger.debug("scrapeURL index metrics", {
-          module: "scrapeURL/index-metrics",
-          timeTaken: Date.now() - startTime,
-          changeTrackingEnabled: !!hasFormatOfType(
-            meta.options.formats,
-            "changeTracking",
-          ),
-          summaryEnabled: !!hasFormatOfType(meta.options.formats, "summary"),
-          jsonEnabled: !!hasFormatOfType(meta.options.formats, "json"),
-          screenshotEnabled: !!hasFormatOfType(
-            meta.options.formats,
-            "screenshot",
-          ),
-          imagesEnabled: !!hasFormatOfType(meta.options.formats, "images"),
-          brandingEnabled: !!hasFormatOfType(meta.options.formats, "branding"),
-          pdfMaxPages: getPDFMaxPages(meta.options.parsers),
-          maxAge: meta.options.maxAge,
-          headers: meta.options.headers
-            ? Object.keys(meta.options.headers).length
-            : 0,
-          actions: meta.options.actions?.length ?? 0,
-          proxy: meta.options.proxy,
-          success: false,
-          indexHit: false,
-        });
-      }
-
-      // Set error attributes on span
-      let errorType = "unknown";
       if (error instanceof NoEnginesLeftError) {
-        errorType = "NoEnginesLeftError";
         meta.logger.warn("scrapeURL: All scraping engines failed!", { error });
-      } else if (error instanceof LLMRefusalError) {
-        errorType = "LLMRefusalError";
-        meta.logger.warn("scrapeURL: LLM refused to extract content", {
-          error,
-        });
-      } else if (
-        error instanceof Error &&
-        error.message.includes("Invalid schema for response_format")
-      ) {
-        errorType = "LLMSchemaError";
-        // TODO: separate into custom error
-        meta.logger.warn("scrapeURL: LLM schema error", { error });
-        // TODO: results?
       } else if (error instanceof SiteError) {
-        errorType = "SiteError";
         meta.logger.warn("scrapeURL: Site failed to load in browser", {
           error,
         });
       } else if (error instanceof SSLError) {
-        errorType = "SSLError";
         meta.logger.warn("scrapeURL: SSL error", { error });
       } else if (error instanceof ActionError) {
-        errorType = "ActionError";
         meta.logger.warn("scrapeURL: Action(s) failed to complete", { error });
       } else if (error instanceof UnsupportedFileError) {
-        errorType = "UnsupportedFileError";
         meta.logger.warn("scrapeURL: Tried to scrape unsupported file", {
           error,
         });
       } else if (error instanceof PDFInsufficientTimeError) {
-        errorType = "PDFInsufficientTimeError";
         meta.logger.warn("scrapeURL: Insufficient time to process PDF", {
           error,
         });
       } else if (error instanceof PDFOCRRequiredError) {
-        errorType = "PDFOCRRequiredError";
         meta.logger.warn(
           "scrapeURL: PDF requires OCR but fast mode was requested",
           {
@@ -1194,58 +1008,34 @@ export async function scrapeURL(
           },
         );
       } else if (error instanceof PDFPrefetchFailed) {
-        errorType = "PDFPrefetchFailed";
         meta.logger.warn(
           "scrapeURL: Failed to prefetch PDF that is protected by anti-bot",
           { error },
         );
       } else if (error instanceof DocumentPrefetchFailed) {
-        errorType = "DocumentPrefetchFailed";
         meta.logger.warn(
           "scrapeURL: Failed to prefetch document that is protected by anti-bot",
           { error },
         );
-      } else if (error instanceof BrandingNotSupportedError) {
-        errorType = "BrandingNotSupportedError";
-        meta.logger.warn("scrapeURL: Branding not supported for this content", {
-          error,
-        });
       } else if (error instanceof ProxySelectionError) {
-        errorType = "ProxySelectionError";
         meta.logger.warn("scrapeURL: Proxy selection error", { error });
       } else if (error instanceof DNSResolutionError) {
-        errorType = "DNSResolutionError";
         meta.logger.warn("scrapeURL: DNS resolution error", { error });
       } else if (error instanceof ScrapeRetryLimitError) {
-        errorType = "ScrapeRetryLimitError";
         meta.logger.warn("scrapeURL: Retry limit reached", {
           error,
           retryStats: error.stats,
         });
       } else if (error instanceof AbortManagerThrownError) {
-        errorType = "AbortManagerThrownError";
         throw error.inner;
       } else {
-        captureExceptionWithZdrCheck(error, {
-          extra: {
-            zeroDataRetention: internalOptions.zeroDataRetention ?? false,
-          },
-        });
         meta.logger.error("scrapeURL: Unexpected error happened", { error });
         // TODO: results?
       }
-
-      setSpanAttributes(span, {
-        "scrape.success": false,
-        "scrape.error": error instanceof Error ? error.message : String(error),
-        "scrape.error_type": errorType,
-        "scrape.duration_ms": Date.now() - startTime,
-      });
 
       return {
         success: false,
         error,
       };
     }
-  });
 }

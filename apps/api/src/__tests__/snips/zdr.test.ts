@@ -1,4 +1,3 @@
-import { getJobFromGCS } from "../../../lib/gcs-jobs";
 import {
   scrape,
   crawl,
@@ -41,9 +40,6 @@ describeIf(TEST_PRODUCTION)("Zero Data Retention", () => {
         },
         identity,
       );
-
-      const gcsJob = await getJobFromGCS(scrape1.metadata.scrapeId!);
-      expect(gcsJob).toBeNull();
 
       await expectScrapeIsCleanedUp(scrape1.metadata.scrapeId!);
 

@@ -3,8 +3,6 @@
 
 // Value exports (runtime)
 export {
-  webhookSchema,
-  createWebhookSchema,
   URL,
   scrapeOptions,
   toV2CrawlerOptions,
@@ -48,7 +46,6 @@ export type {
   RequestWithAuth,
   RequestWithMaybeACUC,
   RequestWithMaybeAuth,
-  ResponseWithSentry,
   AuthCreditUsageChunk,
   AuthCreditUsageChunkFromTeam,
   ScrapeRequest,

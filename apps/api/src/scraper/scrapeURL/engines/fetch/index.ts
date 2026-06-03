@@ -141,7 +141,6 @@ registerEngine({
     skipTlsVerification: true,
     useFastMode: true,
     stealthProxy: false,
-    branding: false,
     disableAdblock: false,
   },
   quality: 5,

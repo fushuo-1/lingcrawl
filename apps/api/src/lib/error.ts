@@ -22,7 +22,6 @@ export type ErrorCodes =
   | "SCRAPE_NO_CACHED_DATA"
   | "SCRAPE_SITEMAP_ERROR"
   | "SCRAPE_ACTIONS_NOT_SUPPORTED"
-  | "SCRAPE_BRANDING_NOT_SUPPORTED"
   | "CRAWL_DENIAL"
   | "BAD_REQUEST_INVALID_JSON"
   | "BAD_REQUEST";
@@ -209,7 +208,7 @@ export class ActionsNotSupportedError extends TransportableError {
 
 /**
  * Error thrown when a job is cancelled (expected flow control, not a real error)
- * This should not be sent to Sentry as it's expected behavior when a crawl/batch is cancelled
+ * This is expected behavior when a crawl/batch is cancelled
  */
 export class JobCancelledError extends Error {
   constructor() {

@@ -1,11 +1,9 @@
 import "dotenv/config";
 import { config } from "./config";
-import { setSentryServiceTag } from "./services/sentry";
-import * as Sentry from "@sentry/node";
 import express, { NextFunction, Request, Response } from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import { getPrecrawlQueue } from "./services/queue-service";
+
 import { apiRouter } from "./routes/api";
 import { adminRouter } from "./routes/admin";
 import os from "os";
@@ -16,7 +14,6 @@ import expressWs from "express-ws";
 import {
   ErrorResponse,
   RequestWithMaybeACUC,
-  ResponseWithSentry,
 } from "./controllers/types";
 import { ZodError } from "zod";
 import { QueueFullError } from "./services/queue-jobs";
@@ -27,10 +24,6 @@ import { getErrorContactMessage } from "./lib/deployment";
 import { initializeBlocklist } from "./scraper/WebScraper/utils/blocklist";
 import { initializeEngineForcing } from "./scraper/WebScraper/utils/engine-forcing";
 import responseTime from "response-time";
-
-const { createBullBoard } = require("@bull-board/api");
-const { BullMQAdapter } = require("@bull-board/api/bullMQAdapter");
-const { ExpressAdapter } = require("@bull-board/express");
 
 const numCPUs = config.ENV === "local" ? 2 : os.cpus().length;
 logger.info(`Number of CPUs: ${numCPUs} available`);
@@ -50,8 +43,6 @@ const app = ws.app;
 
 global.isProduction = config.IS_PRODUCTION;
 
-setSentryServiceTag("api");
-
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json({ limit: "10mb" }));
 
@@ -60,22 +51,6 @@ app.use(cors()); // Add this line to enable CORS
 app.use(responseTime());
 
 app.disable("x-powered-by");
-
-if (config.EXPRESS_TRUST_PROXY) {
-  app.set("trust proxy", config.EXPRESS_TRUST_PROXY);
-}
-
-const serverAdapter = new ExpressAdapter();
-serverAdapter.setBasePath(`/admin/${config.BULL_AUTH_KEY}/queues`);
-
-const { addQueue, removeQueue, setQueues, replaceQueues } = createBullBoard({
-  queues: [
-    new BullMQAdapter(getPrecrawlQueue()),
-  ],
-  serverAdapter: serverAdapter,
-});
-
-app.use(`/admin/${config.BULL_AUTH_KEY}/queues`, serverAdapter.getRouter());
 
 app.get("/", (_, res) => {
   res.json({
@@ -197,13 +172,16 @@ app.use(
   },
 );
 
-Sentry.setupExpressErrorHandler(app);
+// Pass-through error-logger middleware
+app.use((err: unknown, _req: Request, _res: Response, next: NextFunction) => {
+  next(err);
+});
 
 app.use(
   (
     err: unknown,
     req: RequestWithMaybeACUC<{}, ErrorResponse, undefined>,
-    res: ResponseWithSentry<ErrorResponse>,
+    res: Response<ErrorResponse>,
     next: NextFunction,
   ) => {
     if (
@@ -219,7 +197,7 @@ app.use(
       });
     }
 
-    const id = res.sentry ?? uuidv7();
+    const id = uuidv7();
 
     logger.error(
       "Error occurred in request! (" + req.path + ") -- ID " + id + " -- ",
@@ -240,4 +218,3 @@ app.use(
 );
 
 logger.info(`Worker ${process.pid} started`);
-        "Unrecognized key in body -- please review the API documentation for request body changes";

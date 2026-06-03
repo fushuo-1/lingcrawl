@@ -1,6 +1,5 @@
 // Action stub (v1 removed)
 type Action = any;
-import type { BrandingProfile } from "../types/branding";
 
 export type PageOptions = {
   includeMarkdown?: boolean;
@@ -78,7 +77,6 @@ export class Document {
     }[];
     pdfs?: string[];
   };
-  branding?: BrandingProfile;
 
   index?: number;
   linksOnPage?: string[]; // Add this new field as a separate property

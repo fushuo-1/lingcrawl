@@ -1,5 +1,4 @@
 import { Meta } from "../..";
-import { config } from "../../../../config";
 import { EngineScrapeResult, registerEngine } from "..";
 import * as marked from "marked";
 import { downloadFile, fetchFileToBuffer } from "../utils/downloadFile";
@@ -8,28 +7,22 @@ import {
   PDFInsufficientTimeError,
   PDFOCRRequiredError,
   PDFPrefetchFailed,
-  RemoveFeatureError,
   EngineUnsuccessfulError,
 } from "../../error";
 import { open, readFile, unlink } from "node:fs/promises";
 import type { Response } from "undici";
-import { captureExceptionWithZdrCheck } from "../../../../services/sentry";
-import { AbortManagerThrownError } from "../../lib/abortManager";
 import {
   shouldParsePDF,
   getPDFMaxPages,
   getPDFMode,
 } from "../../../../controllers/types";
 import type { PDFMode } from "../../../../controllers/types";
-import { processPdf, detectPdf } from "@lingcrawl/lingcrawl-rs";
-import { MAX_FILE_SIZE, MILLISECONDS_PER_PAGE } from "./types";
+import { processPdf } from "@lingcrawl/lingcrawl-rs";
+import { MILLISECONDS_PER_PAGE } from "./types";
 import type { PDFProcessorResult } from "./types";
 import { emitNativeLogs, extractAndEmitNativeLogs } from "../../../../lib/native-logging";
-import { withSpan, setSpanAttributes } from "../../../../lib/otel-tracer";
-import { scrapePDFWithRunPodMU } from "./runpodMU";
 import { scrapePDFWithParsePDF } from "./pdfParse";
 import { isPdfBuffer, PDF_SNIFF_WINDOW } from "./pdfUtils";
-import { comparePdfOutputs } from "./shadowComparison";
 
 /** Check if the PDF is eligible for Rust extraction, returning a rejection reason or null. */
 function getIneligibleReason(
@@ -143,165 +136,71 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
     let result: PDFProcessorResult | null = null;
     let effectivePageCount: number = 0;
     let metadataTitle: string | undefined;
-    let rustMarkdownForShadow: string | undefined;
-    let shadowPdfType: string | undefined;
-    let shadowConfidence: number | undefined;
-    let shadowIsComplex: boolean | undefined;
-    let shadowIneligibleReason: string | null | undefined;
-
-    const rustEnabled = !!config.PDF_RUST_EXTRACT_ENABLE;
     const logger = meta.logger.child({ method: "scrapePDF/processPdf" });
 
-    if (!rustEnabled || mode === "ocr") {
-      // Legacy / OCR path: detect metadata only, skip Rust extraction.
-      // When PDF_RUST_EXTRACT_ENABLE is off this is the only path taken,
-      // matching current prod behaviour (detectPdf → MinerU → pdfParse).
-      try {
-        const nativeCtx = { scrapeId: meta.id, url: meta.rewrittenUrl ?? meta.url };
-        const startedAt = Date.now();
-        const detection = await withSpan("native.pdf.detect", async (span) => {
-          const result = detectPdf(tempFilePath, nativeCtx);
-          setSpanAttributes(span, {
-            "native.module": "pdf",
-            "native.pdf_type": result.pdfType,
-            "native.page_count": result.pageCount,
-          });
-          emitNativeLogs(result.logs, meta.logger, "pdf.detect");
-          return result;
-        });
-        const durationMs = Date.now() - startedAt;
+    // Rust extraction
+    try {
+      const nativeCtx = { scrapeId: meta.id, url: meta.rewrittenUrl ?? meta.url };
+      const startedAt = Date.now();
+      const pdfResult = processPdf(tempFilePath, maxPages ?? undefined, nativeCtx);
+      emitNativeLogs(pdfResult.logs, meta.logger, "pdf.process");
+      const durationMs = Date.now() - startedAt;
 
-        logger.info("detectPdf completed", {
-          durationMs,
-          pdfType: detection.pdfType,
-          pageCount: detection.pageCount,
-          url: meta.rewrittenUrl ?? meta.url,
-          rustEnabled,
-          mode,
-        });
+      logger.info("processPdf completed", {
+        durationMs,
+        pdfType: pdfResult.pdfType,
+        pageCount: pdfResult.pageCount,
+        confidence: pdfResult.confidence,
+        isComplex: pdfResult.isComplex,
+        markdownLength: pdfResult.markdown?.length ?? 0,
+        url: meta.rewrittenUrl ?? meta.url,
+        mode,
+      });
 
-        effectivePageCount = maxPages
-          ? Math.min(detection.pageCount, maxPages)
-          : detection.pageCount;
-        metadataTitle = detection.title ?? undefined;
-      } catch (error) {
-        extractAndEmitNativeLogs(error, meta.logger, "pdf.detect");
-        logger.warn("detectPdf failed", {
-          error,
-          url: meta.rewrittenUrl ?? meta.url,
-        });
-        captureExceptionWithZdrCheck(error, {
-          extra: {
-            zeroDataRetention: meta.internalOptions.zeroDataRetention ?? false,
-            scrapeId: meta.id,
-            teamId: meta.internalOptions.teamId,
-            url: meta.rewrittenUrl ?? meta.url,
-          },
-        });
+      effectivePageCount = maxPages
+        ? Math.min(pdfResult.pageCount, maxPages)
+        : pdfResult.pageCount;
+      metadataTitle = pdfResult.title ?? undefined;
+
+      const ineligibleReason = getIneligibleReason(pdfResult);
+      const eligible = !ineligibleReason;
+
+      logger.info("Rust PDF eligibility", {
+        rust_pdf_eligible: eligible,
+        reason: ineligibleReason ?? "eligible",
+        url: meta.rewrittenUrl ?? meta.url,
+        pdfType: pdfResult.pdfType,
+        isComplex: pdfResult.isComplex,
+        pageCount: pdfResult.pageCount,
+        confidence: pdfResult.confidence,
+        mode,
+      });
+
+      // In fast mode, if the PDF requires OCR, fail immediately.
+      if (
+        mode === "fast" &&
+        (pdfResult.pdfType === "Scanned" ||
+          pdfResult.pdfType === "ImageBased")
+      ) {
+        throw new PDFOCRRequiredError(pdfResult.pdfType);
       }
-    } else {
-      // Rust extraction enabled (fast / auto modes).
-      try {
-        const nativeCtx = { scrapeId: meta.id, url: meta.rewrittenUrl ?? meta.url };
-        const startedAt = Date.now();
-        const pdfResult = await withSpan("native.pdf.process", async (span) => {
-          const result = processPdf(tempFilePath, maxPages ?? undefined, nativeCtx);
-          setSpanAttributes(span, {
-            "native.module": "pdf",
-            "native.pdf_type": result.pdfType,
-            "native.page_count": result.pageCount,
-            "native.confidence": result.confidence,
-            "native.is_complex": result.isComplex,
-          });
-          emitNativeLogs(result.logs, meta.logger, "pdf.process");
-          return result;
-        });
-        const durationMs = Date.now() - startedAt;
 
-        logger.info("processPdf completed", {
-          durationMs,
-          pdfType: pdfResult.pdfType,
-          pageCount: pdfResult.pageCount,
-          confidence: pdfResult.confidence,
-          isComplex: pdfResult.isComplex,
-          markdownLength: pdfResult.markdown?.length ?? 0,
-          url: meta.rewrittenUrl ?? meta.url,
-          mode,
-        });
-
-        effectivePageCount = maxPages
-          ? Math.min(pdfResult.pageCount, maxPages)
-          : pdfResult.pageCount;
-        metadataTitle = pdfResult.title ?? undefined;
-
-        const ineligibleReason = getIneligibleReason(pdfResult);
-        const eligible = !ineligibleReason;
-
-        logger.info("Rust PDF eligibility", {
-          rust_pdf_eligible: eligible,
-          reason: ineligibleReason ?? "eligible",
-          url: meta.rewrittenUrl ?? meta.url,
-          pdfType: pdfResult.pdfType,
-          isComplex: pdfResult.isComplex,
-          pageCount: pdfResult.pageCount,
-          confidence: pdfResult.confidence,
-          mode,
-        });
-
-        // Only shadow-compare when Rust had a real chance at extraction.
-        // Scanned/ImageBased/Mixed PDFs are expected to produce near-zero
-        // Rust output — comparing them just adds noise to the metrics.
-        const shadowEligible =
-          !eligible &&
-          pdfResult.markdown &&
-          config.PDF_SHADOW_COMPARISON_ENABLE &&
-          pdfResult.pdfType === "TextBased";
-
-        rustMarkdownForShadow = shadowEligible ? pdfResult.markdown : undefined;
-        if (shadowEligible) {
-          shadowPdfType = pdfResult.pdfType;
-          shadowConfidence = pdfResult.confidence;
-          shadowIsComplex = pdfResult.isComplex;
-          shadowIneligibleReason = ineligibleReason;
-        }
-
-        // In fast mode, if the PDF requires OCR, fail immediately with a
-        // clear error instead of returning empty content.
-        if (
-          mode === "fast" &&
-          (pdfResult.pdfType === "Scanned" ||
-            pdfResult.pdfType === "ImageBased")
-        ) {
-          throw new PDFOCRRequiredError(pdfResult.pdfType);
-        }
-
-        if (eligible && pdfResult.markdown) {
-          const html = await marked.parse(pdfResult.markdown, { async: true });
-          result = { markdown: pdfResult.markdown, html };
-        }
-      } catch (error) {
-        if (error instanceof PDFOCRRequiredError) {
-          throw error;
-        }
-        extractAndEmitNativeLogs(error, meta.logger, "pdf.process");
-        logger.warn("processPdf failed, falling back to MU/PdfParse", {
-          error,
-          url: meta.rewrittenUrl ?? meta.url,
-        });
-        captureExceptionWithZdrCheck(error, {
-          extra: {
-            zeroDataRetention: meta.internalOptions.zeroDataRetention ?? false,
-            scrapeId: meta.id,
-            teamId: meta.internalOptions.teamId,
-            url: meta.rewrittenUrl ?? meta.url,
-          },
-        });
-        // effectivePageCount stays 0 — skip time budget check
+      if (eligible && pdfResult.markdown) {
+        const html = await marked.parse(pdfResult.markdown, { async: true });
+        result = { markdown: pdfResult.markdown, html };
       }
+    } catch (error) {
+      if (error instanceof PDFOCRRequiredError) {
+        throw error;
+      }
+      extractAndEmitNativeLogs(error, meta.logger, "pdf.process");
+      logger.warn("processPdf failed, falling back to pdfParse", {
+        error,
+        url: meta.rewrittenUrl ?? meta.url,
+      });
     }
 
-    // Only enforce the per-page time budget when we need MU/fallback.
-    // Rust extraction is fast enough that the constraint doesn't apply.
+    // Time budget check for pdfParse fallback.
     if (
       !result &&
       effectivePageCount > 0 &&
@@ -314,106 +213,8 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
       );
     }
 
-    // OCR / MU fallback.
-    // Skipped only when Rust extraction is enabled AND mode is "fast".
-    const skipOCR = rustEnabled && mode === "fast";
-    if (!result && !skipOCR) {
-      const base64Content = (await readFile(tempFilePath)).toString("base64");
-
-      if (
-        base64Content.length < MAX_FILE_SIZE &&
-        config.RUNPOD_MU_API_KEY &&
-        config.RUNPOD_MU_POD_ID
-      ) {
-        const muV1StartedAt = Date.now();
-        try {
-          result = await scrapePDFWithRunPodMU(
-            {
-              ...meta,
-              logger: meta.logger.child({
-                method: "scrapePDF/scrapePDFWithRunPodMU",
-              }),
-            },
-            tempFilePath,
-            base64Content,
-            maxPages,
-            effectivePageCount,
-          );
-          const muV1DurationMs = Date.now() - muV1StartedAt;
-          meta.logger
-            .child({ method: "scrapePDF/MUv1Experiment" })
-            .info("MU v1 completed", {
-              durationMs: muV1DurationMs,
-              url: meta.rewrittenUrl ?? meta.url,
-              pages: effectivePageCount,
-              success: true,
-            });
-
-          if (
-            rustMarkdownForShadow &&
-            result?.markdown &&
-            config.PDF_SHADOW_COMPARISON_ENABLE
-          ) {
-            const shadowRust = rustMarkdownForShadow;
-            const shadowMu = result.markdown;
-            const shadowLogger = meta.logger.child({
-              method: "scrapePDF/shadowComparison",
-            });
-            const isZdr = !!meta.internalOptions.zeroDataRetention;
-
-            (async () => {
-              try {
-                const metrics = comparePdfOutputs(shadowRust, shadowMu);
-                shadowLogger.info("shadow comparison complete", {
-                  scrapeId: meta.id,
-                  url: isZdr ? undefined : (meta.rewrittenUrl ?? meta.url),
-                  pageCount: effectivePageCount,
-                  pdfType: shadowPdfType,
-                  confidence: shadowConfidence,
-                  isComplex: shadowIsComplex,
-                  ineligibleReason: shadowIneligibleReason,
-                  ...metrics.overall,
-                });
-              } catch (error) {
-                shadowLogger.warn("shadow comparison failed", { error });
-              }
-            })();
-          }
-        } catch (error) {
-          if (
-            error instanceof RemoveFeatureError ||
-            error instanceof AbortManagerThrownError
-          ) {
-            throw error;
-          }
-          meta.logger.warn(
-            "RunPod MU failed to parse PDF (could be due to timeout) -- falling back to parse-pdf",
-            { error },
-          );
-          captureExceptionWithZdrCheck(error, {
-            extra: {
-              zeroDataRetention:
-                meta.internalOptions.zeroDataRetention ?? false,
-              scrapeId: meta.id,
-              teamId: meta.internalOptions.teamId,
-              url: meta.rewrittenUrl ?? meta.url,
-            },
-          });
-          const muV1DurationMs = Date.now() - muV1StartedAt;
-          meta.logger
-            .child({ method: "scrapePDF/MUv1Experiment" })
-            .info("MU v1 failed", {
-              durationMs: muV1DurationMs,
-              url: meta.rewrittenUrl ?? meta.url,
-              pages: effectivePageCount,
-              success: false,
-            });
-        }
-      }
-    }
-
-    // Final fallback to PdfParse.
-    if (!result) {
+    // Fallback to pdfParse (skipped in fast mode).
+    if (!result && mode !== "fast") {
       result = await scrapePDFWithParsePDF(
         {
           ...meta,
@@ -472,7 +273,6 @@ registerEngine({
     skipTlsVerification: false,
     useFastMode: true,
     stealthProxy: true,
-    branding: false,
     disableAdblock: true,
   },
   quality: -20,

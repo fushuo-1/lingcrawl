@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import { config } from "../config";
 import { z } from "zod";
 import { protocolIncluded, checkUrl } from "../lib/validateUrl";
 import { countries } from "../lib/validate-country";
@@ -12,20 +11,6 @@ import { ErrorCodes } from "../lib/error";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import { integrationSchema } from "../utils/integration";
-import { BrandingProfile } from "../types/branding";
-
-// Minimal webhook schemas (trimmed from original codebase)
-export const webhookSchema = z.object({
-  url: z.string().url(),
-  events: z.array(z.string()).optional(),
-});
-
-export function createWebhookSchema(events: string[]) {
-  return z.object({
-    url: z.string().url(),
-    events: z.array(z.enum(events as [string, ...string[]])).optional(),
-  });
-}
 
 // Base URL schema with common validation logic
 export const URL = z.preprocess(
@@ -50,15 +35,6 @@ export const URL = z.preprocess(
     .url()
     .regex(/^https?:\/\//i, "URL uses unsupported protocol")
     .refine(x => {
-      if (config.TEST_SUITE_SELF_HOSTED && config.ALLOW_LOCAL_WEBHOOKS) {
-        if (
-          /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?([\/?#]|$)/i.test(
-            x as string,
-          )
-        ) {
-          return true;
-        }
-      }
       return /(\.[a-zA-Z0-9-\u0400-\u04FF\u0500-\u052F\u2DE0-\u2DFF\uA640-\uA69F]{2,}|\.xn--[a-zA-Z0-9-]{1,})(:\d+)?([\/?#]|$)/i.test(
         x,
       );
@@ -418,8 +394,7 @@ export type FormatObject =
   | ChangeTrackingFormatWithOptions
   | ScreenshotFormatWithOptions
   | AttributesFormatWithOptions
-  | QueryFormatWithOptions
-  | { type: "branding" };
+  | QueryFormatWithOptions;
 
 const pdfModeSchema = z.enum(["fast", "auto", "ocr"]);
 
@@ -526,7 +501,6 @@ const baseScrapeOptions = z.strictObject({
           changeTrackingFormatWithOptions,
           screenshotFormatWithOptions,
           attributesFormatWithOptions,
-          z.strictObject({ type: z.literal("branding") }),
           queryFormatWithOptions,
         ])
         .array()
@@ -729,7 +703,6 @@ const extractOptions = z
       .optional(),
     __experimental_showCostTracking: z.boolean().prefault(false),
     ignoreInvalidURLs: z.boolean().prefault(true),
-    webhook: webhookSchema.optional(),
   })
   .refine(obj => obj.urls || obj.prompt, {
     error: "Either 'urls' or 'prompt' must be provided.",
@@ -750,14 +723,6 @@ const extractOptions = z
 export const extractRequestSchema = extractOptions;
 export type ExtractRequest = z.infer<typeof extractRequestSchema>;
 export type ExtractRequestInput = z.input<typeof extractRequestSchema>;
-
-const agentWebhookSchema = createWebhookSchema([
-  "started",
-  "action",
-  "completed",
-  "failed",
-  "cancelled",
-]);
 
 export const agentRequestSchema = z.strictObject({
   urls: URL.array().optional(),
@@ -786,7 +751,6 @@ export const agentRequestSchema = z.strictObject({
   integration: integrationSchema.optional().transform(val => val || null),
   maxCredits: z.number().optional(),
   strictConstrainToURLs: z.boolean().optional(),
-  webhook: agentWebhookSchema.optional(),
 
   overrideWhitelist: z.string().optional(),
   model: z.enum(["spark-1-pro", "spark-1-mini"]).default("spark-1-pro"),
@@ -834,7 +798,6 @@ const batchScrapeRequestSchemaBase = baseScrapeOptions.extend({
   urls: URL.array().min(1),
   origin: z.string().optional().prefault("api"),
   integration: integrationSchema.optional().transform(val => val || null),
-  webhook: webhookSchema.optional(),
   appendToId: z.uuid().optional(),
   ignoreInvalidURLs: z.boolean().prefault(true),
   maxConcurrency: z.int().positive().optional(),
@@ -858,7 +821,6 @@ const batchScrapeRequestSchemaNoURLValidationBase = baseScrapeOptions.extend({
   urls: z.string().array().min(1),
   origin: z.string().optional().prefault("api"),
   integration: integrationSchema.optional().transform(val => val || null),
-  webhook: webhookSchema.optional(),
   appendToId: z.uuid().optional(),
   ignoreInvalidURLs: z.boolean().prefault(true),
   maxConcurrency: z.int().positive().optional(),
@@ -890,7 +852,6 @@ export type BatchScrapeRequestInput = Omit<
   urls: z.input<typeof URL>[];
   origin?: string;
   integration?: z.input<typeof integrationSchema> | null;
-  webhook?: z.input<typeof webhookSchema>;
   appendToId?: string;
   ignoreInvalidURLs?: boolean;
   maxConcurrency?: number;
@@ -930,7 +891,6 @@ const crawlRequestSchemaBase = crawlerOptions.extend({
   origin: z.string().optional().prefault("api"),
   integration: integrationSchema.optional().transform(val => val || null),
   scrapeOptions: baseScrapeOptions.prefault(() => baseScrapeOptions.parse({})),
-  webhook: webhookSchema.optional(),
   limit: z.number().prefault(10000),
   maxConcurrency: z.int().positive().optional(),
   zeroDataRetention: z.boolean().optional(),
@@ -1009,7 +969,6 @@ export type Document = {
   json?: any;
   summary?: string;
   answer?: string;
-  branding?: BrandingProfile;
   warning?: string;
   attributes?: {
     selector: string;
@@ -1300,7 +1259,6 @@ export type TeamFlags = {
   crawlTtlHours?: number;
   ipWhitelist?: boolean;
   bypassCreditChecks?: boolean;
-  debugBranding?: boolean;
 } | null;
 
 interface RequestWithMaybeACUC<
@@ -1652,11 +1610,6 @@ export interface RequestWithMaybeAuth<
 > extends RequestWithMaybeACUC<ReqParams, ReqBody, ResBody> {
   auth?: { team_id: string };
   account?: { remainingCredits: number };
-}
-
-export interface ResponseWithSentry<ResBody = undefined>
-  extends Response<ResBody> {
-  sentry?: string;
 }
 
 export type AuthCreditUsageChunk = any;

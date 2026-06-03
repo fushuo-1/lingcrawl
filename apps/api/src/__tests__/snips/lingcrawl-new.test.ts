@@ -86,7 +86,7 @@ describe("Extract endpoint (free mode)", () => {
 });
 
 describe("Summary endpoint", () => {
-  const hasAI = !!(config.OPENAI_API_KEY || config.OLLAMA_BASE_URL);
+  const hasAI = false;
 
   (hasAI ? it : it.skip)(
     "returns a summary for a page",

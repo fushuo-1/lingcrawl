@@ -4,19 +4,16 @@ import {
   ScrapeOptions,
   Document as V2Document,
   TeamFlags,
-  webhookSchema,
 } from "./controllers/types";
 // AuthCreditUsageChunk stub
 type AuthCreditUsageChunk = any;
 import { ExtractorOptions, Document } from "./lib/entities";
 import { InternalOptions } from "./scraper/scrapeURL";
-import { SerializedTraceContext } from "./lib/otel-tracer";
 
 type ScrapeJobCommon = {
   concurrencyLimited?: boolean;
   team_id: string;
   zeroDataRetention: boolean;
-  traceContext?: SerializedTraceContext;
   skipNuq?: boolean;
   requestId?: string;
 };
@@ -38,7 +35,6 @@ type ScrapeJobSingleUrlsUnique = {
   origin: string;
   crawl_id?: string;
   sitemapped?: boolean;
-  webhook?: z.infer<typeof webhookSchema>;
   integration?: string | null;
 
   /**
@@ -50,7 +46,6 @@ type ScrapeJobSingleUrlsUnique = {
   from_extract?: boolean;
   startTime?: number;
 
-  sentry?: any;
   is_extract?: boolean;
   apiKeyId: number | null;
 };
@@ -67,7 +62,6 @@ type ScrapeJobKickoffUnique = {
   origin: string;
   integration?: string | null;
   crawl_id: string;
-  webhook?: z.infer<typeof webhookSchema>;
   apiKeyId: number | null;
 };
 
@@ -81,7 +75,6 @@ type ScrapeJobKickoffSitemapUnique = {
   location?: ScrapeOptions["location"];
   origin: string;
   integration?: string | null;
-  webhook?: z.infer<typeof webhookSchema>;
   apiKeyId: number | null;
 };
 

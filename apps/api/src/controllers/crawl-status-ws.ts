@@ -15,7 +15,6 @@ import {
   getDoneJobsOrdered,
 } from "../lib/crawl-redis";
 import { getJobs, PseudoJob } from "./crawl-status";
-import * as Sentry from "@sentry/node";
 import { scrapeQueue, NuQJobStatus } from "../services/worker/nuq";
 import { getErrorContactMessage } from "../lib/deployment";
 
@@ -184,8 +183,6 @@ export async function crawlStatusWSController(
   try {
     await crawlStatusWS(ws, req.params.jobId);
   } catch (err) {
-    Sentry.captureException(err);
-
     const id = uuidv7();
     let verbose = JSON.stringify(err);
     if (verbose === "{}") {

@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { config } from "../config";
 import { v7 as uuidv7 } from "uuid";
 import {
   CrawlRequest,
@@ -85,7 +84,6 @@ export const crawlController = withErrorHandler(async (
     internalOptions: {
       disableSmartWaitCache: true,
       teamId: "local",
-      saveScrapeResultToGCS: config.GCS_FIRE_ENGINE_BUCKET_NAME ? true : false,
       zeroDataRetention,
     },
     team_id: "local",
@@ -125,7 +123,6 @@ export const crawlController = withErrorHandler(async (
       origin: req.body.origin,
       integration: req.body.integration,
       crawl_id: id,
-      webhook: req.body.webhook,
       v1: true,
       zeroDataRetention: zeroDataRetention || false,
     } as any,

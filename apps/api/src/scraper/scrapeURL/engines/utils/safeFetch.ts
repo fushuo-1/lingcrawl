@@ -53,7 +53,7 @@ function attachSecurityCheck(agent: undici.Dispatcher) {
     if (
       socket.remoteAddress &&
       isIPPrivate(socket.remoteAddress) &&
-      config.ALLOW_LOCAL_WEBHOOKS !== true
+      config.ALLOW_LOCAL_NETWORK !== true
     ) {
       socket.destroy(new InsecureConnectionError());
     }
@@ -69,7 +69,7 @@ function makeSecureDispatcher(skipTlsVerification: boolean) {
   return agent;
 }
 
-// Dispatcher WITHOUT cookie handling (for webhooks - avoids empty cookie header bug)
+// Dispatcher WITHOUT cookie handling (for SSRF-safe local network requests)
 function makeSecureDispatcherNoCookies(skipTlsVerification: boolean) {
   const agent = createBaseAgent(skipTlsVerification);
   attachSecurityCheck(agent);
@@ -85,7 +85,7 @@ const secureDispatcherNoCookiesSkipTlsVerification =
 export const getSecureDispatcher = (skipTlsVerification: boolean = false) =>
   skipTlsVerification ? secureDispatcherSkipTlsVerification : secureDispatcher;
 
-// Use this for webhook delivery to avoid sending empty cookie headers
+// Use this for SSRF-safe requests that don't need cookies
 export const getSecureDispatcherNoCookies = (
   skipTlsVerification: boolean = false,
 ) =>

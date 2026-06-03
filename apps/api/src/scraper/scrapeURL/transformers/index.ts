@@ -5,29 +5,13 @@ import { htmlTransform } from "../lib/removeUnwantedElements";
 import { extractLinks } from "../lib/extractLinks";
 import { extractImages } from "../lib/extractImages";
 import { extractMetadata } from "../lib/extractMetadata";
-import {
-  performLLMExtract,
-  performSummary,
-  performQuery,
-  performCleanContent,
-} from "./llmExtract";
 import { uploadScreenshot } from "./uploadScreenshot";
 import { removeBase64Images } from "./removeBase64Images";
 
-// Stub for removed indexer queue
-const indexerQueue = {
-  sendToWorker: async (...args: any[]) => {},
-};
-import { performAgent } from "./agent";
 import { performAttributes } from "./performAttributes";
 
 import { deriveDiff } from "./diff";
-import { useIndex, useSearchIndex } from "../../../services/index";
-import { sendDocumentToIndex } from "../engines/index/index";
-import { sendDocumentToSearchIndex } from "./sendToSearchIndex";
 import { hasFormatOfType } from "../../../lib/format-utils";
-import { brandingTransformer } from "../../../lib/branding/transformer";
-import { config } from "../../../config";
 
 type Transformer = (
   meta: Meta,
@@ -84,9 +68,6 @@ async function deriveMarkdownFromHTML(
 
   // Only derive markdown if markdown format is requested or if formats that require markdown are requested:
   // - changeTracking requires markdown
-  // - json format requires markdown (for LLM extraction)
-  // - summary format requires markdown (for summarization)
-  // - query format requires markdown (for page-level answers)
   const hasMarkdown = hasFormatOfType(meta.options.formats, "markdown");
   const hasChangeTracking = hasFormatOfType(
     meta.options.formats,
@@ -173,22 +154,9 @@ async function deriveLinksFromHTML(
     );
   }
 
-  const rate = config.INDEXER_TRAFFIC_SHARE
-    ? Math.max(0, Math.min(1, Number(config.INDEXER_TRAFFIC_SHARE)))
-    : 0;
-
-  const shouldForwardTraffic =
-    rate > 0 && Math.random() <= rate && !!config.INDEXER_RABBITMQ_URL;
-
-  const forwardToIndexer =
-    !!meta.internalOptions.teamId &&
-    !meta.internalOptions.teamId?.includes("robots-txt") &&
-    !meta.internalOptions.teamId?.includes("sitemap") &&
-    shouldForwardTraffic;
-
   const requiresLinks = !!hasFormatOfType(meta.options.formats, "links");
 
-  if (!forwardToIndexer && !requiresLinks) {
+  if (!requiresLinks) {
     return document;
   }
 
@@ -199,42 +167,6 @@ async function deriveLinksFromHTML(
       meta.rewrittenUrl ??
       meta.url,
   );
-
-  if (forwardToIndexer) {
-    try {
-      let linksDeduped: Set<string> = new Set();
-      if (!!document.links) {
-        linksDeduped = new Set([...document.links]);
-      }
-
-      indexerQueue
-        .sendToWorker({
-          id: meta.id,
-          type: "links",
-          discovery_url:
-            document.metadata.url ??
-            document.metadata.sourceURL ??
-            meta.rewrittenUrl ??
-            meta.url,
-          urls: [...linksDeduped],
-        })
-        .catch(error => {
-          meta.logger.error("Failed to queue links for indexing", {
-            error: (error as Error)?.message,
-            url: meta.url,
-          });
-        });
-    } catch (error) {
-      meta.logger.error("Failed to queue links for indexing", {
-        error: (error as Error)?.message,
-        url: meta.url,
-      });
-    }
-  }
-
-  if (!requiresLinks) {
-    delete document.links;
-  }
 
   return document;
 }
@@ -263,46 +195,6 @@ async function deriveImagesFromHTML(
   return document;
 }
 
-async function deriveBrandingFromActions(
-  meta: Meta,
-  document: Document,
-): Promise<Document> {
-  const hasBranding = hasFormatOfType(meta.options.formats, "branding");
-
-  if (!hasBranding) {
-    return document;
-  }
-
-  if (document.branding !== undefined) {
-    return document;
-  }
-
-  /**
-   * Find the branding return in the actions javascript returns
-   * @see src/scraper/scrapeURL/engines/fire-engine/scripts/branding.js
-   */
-  const brandingReturnIndex = document.actions?.javascriptReturns?.findIndex(
-    x => x.type === "object" && "branding" in (x.value as any),
-  );
-
-  if (brandingReturnIndex === -1 || brandingReturnIndex === undefined) {
-    return document;
-  }
-
-  // cast as any since this is js return, we might need to validate this
-  const javascriptReturn = document.actions!.javascriptReturns![
-    brandingReturnIndex
-  ].value as any;
-
-  const rawBranding = javascriptReturn?.branding;
-
-  document.actions!.javascriptReturns!.splice(brandingReturnIndex, 1);
-
-  document.branding = await brandingTransformer(meta, document, rawBranding);
-
-  return document;
-}
-
 function coerceFieldsToFormats(meta: Meta, document: Document): Document {
   const hasMarkdown = hasFormatOfType(meta.options.formats, "markdown");
   const hasRawHtml = hasFormatOfType(meta.options.formats, "rawHtml");
@@ -316,7 +208,6 @@ function coerceFieldsToFormats(meta: Meta, document: Document): Document {
   const hasJson = hasFormatOfType(meta.options.formats, "json");
   const hasScreenshot = hasFormatOfType(meta.options.formats, "screenshot");
   const hasSummary = hasFormatOfType(meta.options.formats, "summary");
-  const hasBranding = hasFormatOfType(meta.options.formats, "branding");
   const hasQueryFormat = hasFormatOfType(meta.options.formats, "query");
 
   if (!hasMarkdown && document.markdown !== undefined) {
@@ -426,17 +317,6 @@ function coerceFieldsToFormats(meta: Meta, document: Document): Document {
     );
   }
 
-  if (!hasBranding && document.branding !== undefined) {
-    meta.logger.warn(
-      "Removed branding from Document because it wasn't in formats -- this indicates the engine returned unexpected data.",
-    );
-    delete document.branding;
-  } else if (hasBranding && document.branding === undefined) {
-    meta.logger.warn(
-      "Request had format branding, but there was no branding field in the result.",
-    );
-  }
-
   if (!hasChangeTracking && document.changeTracking !== undefined) {
     meta.logger.warn(
       "Removed changeTracking from Document because it wasn't in formats -- this is extremely wasteful and indicates a bug.",
@@ -495,19 +375,11 @@ function coerceFieldsToFormats(meta: Meta, document: Document): Document {
 const transformerStack: Transformer[] = [
   deriveHTMLFromRawHTML,
   deriveMarkdownFromHTML,
-  performCleanContent,
   deriveLinksFromHTML,
   deriveImagesFromHTML,
-  deriveBrandingFromActions,
   deriveMetadataFromRawHTML,
   uploadScreenshot,
-  ...(useIndex ? [sendDocumentToIndex] : []),
-  ...(useSearchIndex ? [sendDocumentToSearchIndex] : []), // Add to search index for real-time search
-  performLLMExtract,
-  performSummary,
-  performQuery,
   performAttributes,
-  performAgent,
   deriveDiff,
   coerceFieldsToFormats,
   removeBase64Images,

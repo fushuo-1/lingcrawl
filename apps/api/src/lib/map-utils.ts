@@ -15,11 +15,10 @@ import {
 } from "./validateUrl";
 import { fireEngineMap } from "../search/fireEngine";
 import { redisEvictConnection } from "../services/redis";
-import {
-  generateURLSplits,
-  queryIndexAtDomainSplitLevelWithMeta,
-  queryIndexAtSplitLevelWithMeta,
-} from "../services/index";
+// generateURLSplits, queryIndexAtDomainSplitLevelWithMeta, queryIndexAtSplitLevelWithMeta removed with index service
+const generateURLSplits = (urls: string[]) => urls;
+const queryIndexAtDomainSplitLevelWithMeta = async (..._args: any[]) => [];
+const queryIndexAtSplitLevelWithMeta = async (..._args: any[]) => [];
 import { performCosineSimilarityV2 } from "./map-cosine";
 import { Logger } from "winston";
 

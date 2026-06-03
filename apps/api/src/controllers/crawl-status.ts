@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { config } from "../config";
 import {
   CrawlStatusParams,
   CrawlStatusResponse,
@@ -11,7 +10,6 @@ import {
   getCrawlExpiry,
 } from "../lib/crawl-redis";
 import { logger } from "../lib/logger";
-import { getJobFromGCS } from "../lib/gcs-jobs";
 import {
   scrapeQueue,
   NuQJob,
@@ -40,13 +38,10 @@ export async function getJob(
   id: string,
   _logger = logger,
 ): Promise<PseudoJob<any> | null> {
-  const [nuqJob, gcsJob] = await Promise.all([
-    scrapeQueue.getJob(
-      id,
-      _logger,
-    ) as Promise<NuQJob<ScrapeJobSingleUrls> | null>,
-    (config.GCS_BUCKET_NAME ? getJobFromGCS(id) : null) as Promise<any | null>,
-  ]);
+  const nuqJob = await scrapeQueue.getJob(
+    id,
+    _logger,
+  ) as NuQJob<ScrapeJobSingleUrls> | null;
 
   if (!nuqJob) return null;
 
@@ -54,7 +49,7 @@ export async function getJob(
     return null;
   }
 
-  const data = gcsJob ?? nuqJob.returnvalue;
+  const data = nuqJob.returnvalue;
 
   const job: PseudoJob<any> = {
     id,
@@ -74,37 +69,22 @@ export async function getJobs(
   ids: string[],
   _logger = logger,
 ): Promise<PseudoJob<any>[]> {
-  const [nuqJobs, gcsJobs] = await Promise.all([
-    scrapeQueue.getJobs(ids, _logger) as Promise<NuQJob<ScrapeJobSingleUrls>[]>,
-    config.GCS_BUCKET_NAME
-      ? (Promise.all(
-          ids.map(async x => ({ id: x, job: await getJobFromGCS(x) })),
-        ).then(x => x.filter(x => x.job)) as Promise<
-          { id: string; job: any | null }[]
-        >)
-      : [],
-  ]);
+  const nuqJobs = await scrapeQueue.getJobs(ids, _logger) as NuQJob<ScrapeJobSingleUrls>[];
 
   const nuqJobMap = new Map<string, NuQJob<any, any>>();
-  const gcsJobMap = new Map<string, any>();
 
   for (const job of nuqJobs) {
     nuqJobMap.set(job.id, job);
-  }
-
-  for (const job of gcsJobs) {
-    gcsJobMap.set(job.id, job.job);
   }
 
   const jobs: PseudoJob<any>[] = [];
 
   for (const id of ids) {
     const nuqJob = nuqJobMap.get(id);
-    const gcsJob = gcsJobMap.get(id);
 
     if (!nuqJob) continue;
 
-    const data = gcsJob ?? nuqJob.returnvalue;
+    const data = nuqJob.returnvalue;
 
     const job: PseudoJob<any> = {
       id,
@@ -215,11 +195,8 @@ function crawlStatusHandler(isBatch: boolean) {
   let bytes = 0;
   const bytesLimit = 10485760;
 
-  const scrapeBlobs = await Promise.all(
-    doneJobs.map(
-      async x =>
-        [x.id, x.returnvalue ?? (await getJobFromGCS(x.id))?.[0]] as const,
-    ),
+  const scrapeBlobs = doneJobs.map(
+    x => [x.id, x.returnvalue] as const,
   );
 
   for (const [id, scrape] of scrapeBlobs) {

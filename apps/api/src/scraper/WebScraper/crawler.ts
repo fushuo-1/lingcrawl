@@ -1,5 +1,4 @@
 import { AxiosError } from "axios";
-import { config } from "../../config";
 import { load } from "cheerio"; // rustified
 import { URL } from "url";
 import { getLinksFromSitemap } from "./sitemap";
@@ -253,16 +252,6 @@ export class WebCrawler {
         }
       });
 
-      if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-        for (const link of res.links) {
-          this.logger.debug(`${link} OK`);
-        }
-
-        for (const [link, reason] of fancyDenialReasons) {
-          this.logger.debug(`${link} ${reason}`);
-        }
-      }
-
       return {
         links: res.links,
         denialReasons: fancyDenialReasons,
@@ -300,9 +289,6 @@ export class WebCrawler {
           "file:",
         ];
         if (nonWebProtocols.some(protocol => urlStr.startsWith(protocol))) {
-          if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-            this.logger.debug(`${link} NON-WEB PROTOCOL FAIL`);
-          }
           denialReasons.set(link, DenialReason.NON_WEB_PROTOCOL);
           return false;
         }
@@ -311,9 +297,6 @@ export class WebCrawler {
 
         // Check if the link exceeds the maximum depth allowed
         if (depth > maxDepth) {
-          if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-            this.logger.debug(`${link} DEPTH FAIL`);
-          }
           denialReasons.set(
             link,
             `This URL exceeds the maximum crawl depth you configured. The URL's depth is ${depth}, but maxDepth is set to ${maxDepth}. To crawl this URL, increase the maxDepth value in your crawl request.`,
@@ -329,9 +312,6 @@ export class WebCrawler {
             new RegExp(excludePattern).test(excincPath),
           );
           if (matchingPattern) {
-            if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-              this.logger.debug(`${link} EXCLUDE FAIL`);
-            }
             denialReasons.set(
               link,
               `This URL's path ("${excincPath}") matches the exclude pattern "${matchingPattern}" you provided in the excludePaths parameter. URLs matching excludePaths are intentionally skipped during crawling. If this URL should be crawled, adjust your excludePaths patterns.`,
@@ -347,9 +327,6 @@ export class WebCrawler {
               new RegExp(includePattern).test(excincPath),
             )
           ) {
-            if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-              this.logger.debug(`${link} INCLUDE FAIL`);
-            }
             denialReasons.set(
               link,
               `This URL's path ("${excincPath}") does not match any of the regex patterns you provided in the includePaths parameter: [${this.includes.map(p => `"${p}"`).join(", ")}]. When includePaths is specified, only URLs matching at least one pattern are crawled. If this URL should be crawled, add a matching pattern to includePaths or remove the includePaths restriction.`,
@@ -364,9 +341,6 @@ export class WebCrawler {
         try {
           normalizedLink = new URL(link);
         } catch (_) {
-          if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-            this.logger.debug(`${link} URL PARSE FAIL`);
-          }
           return false;
         }
         const initialHostname = normalizedInitialUrl.hostname.replace(
@@ -385,11 +359,6 @@ export class WebCrawler {
           if (
             !normalizedLink.pathname.startsWith(normalizedInitialUrl.pathname)
           ) {
-            if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-              this.logger.debug(
-                `${link} BACKWARDS FAIL ${normalizedLink.pathname} ${normalizedInitialUrl.pathname}`,
-              );
-            }
             denialReasons.set(
               link,
               `This URL's path ("${normalizedLink.pathname}") is outside the initial URL's path hierarchy ("${normalizedInitialUrl.pathname}"), and backward crawling is disabled. By default, LingCrawl only crawls URLs that are 'below' or 'within' the starting URL path. To crawl this URL, either set allowBackwardCrawling: true or set crawlEntireDomain: true to crawl the entire domain.`,
@@ -410,9 +379,6 @@ export class WebCrawler {
             method: "filterLinks",
             link,
           });
-          if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-            this.logger.debug(`${link} ROBOTS FAIL`);
-          }
           denialReasons.set(
             link,
             `This URL is blocked by the website's robots.txt file, which instructs crawlers not to access this page. LingCrawl respects robots.txt by default. To crawl this URL anyway, set ignoreRobotsTxt: true in your crawl request (note: this may violate the website's crawling policies).`,
@@ -421,9 +387,6 @@ export class WebCrawler {
         }
 
         if (this.isFile(link)) {
-          if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-            this.logger.debug(`${link} FILE FAIL`);
-          }
           const extension = link.split("?")[0].split(".").pop()?.toLowerCase();
           denialReasons.set(
             link,
@@ -432,9 +395,6 @@ export class WebCrawler {
           return false;
         }
 
-        if (config.LINGCRAWL_DEBUG_FILTER_LINKS) {
-          this.logger.debug(`${link} OK`);
-        }
         return true;
       })
       .slice(0, limit);

@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { config } from "../config";
 import { v7 as uuidv7 } from "uuid";
 import {
   BatchScrapeRequest,
@@ -25,7 +24,6 @@ import { UNSUPPORTED_SITE_MESSAGE } from "../lib/strings";
 import { isUrlBlocked } from "../scraper/WebScraper/utils/blocklist";
 import { crawlGroup } from "../services/worker/nuq";
 import { logRequest } from "../services/logging/log_job";
-import { createWebhookSender, WebhookEvent } from "../services/webhook/index";
 import { withErrorHandler } from "./error-wrapper";
 
 export const batchScrapeController = withErrorHandler(async (
@@ -121,9 +119,6 @@ export const batchScrapeController = withErrorHandler(async (
         internalOptions: {
           disableSmartWaitCache: true,
           teamId: "local",
-          saveScrapeResultToGCS: config.GCS_FIRE_ENGINE_BUCKET_NAME
-            ? true
-            : false,
           zeroDataRetention,
           bypassBilling: true,
         },
@@ -180,7 +175,6 @@ export const batchScrapeController = withErrorHandler(async (
       bypassBilling: true,
       sitemapped: true,
       v1: true,
-      webhook: req.body.webhook,
       internalOptions: sc.internalOptions,
       zeroDataRetention,
     },
@@ -204,19 +198,6 @@ export const batchScrapeController = withErrorHandler(async (
   );
   logger.debug("Adding scrape jobs to BullMQ...");
   await addScrapeJobs(jobs as any);
-
-  if (req.body.webhook) {
-    logger.debug("Calling webhook with batch_scrape.started...", {
-      webhook: req.body.webhook,
-    });
-    const sender = await createWebhookSender({
-      teamId: "local",
-      jobId: id,
-      webhook: req.body.webhook,
-      v0: false,
-    });
-    await sender?.send(WebhookEvent.BATCH_SCRAPE_STARTED, { success: true });
-  }
 
   const protocol = req.protocol;
 

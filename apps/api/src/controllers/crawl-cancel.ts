@@ -1,7 +1,6 @@
 import { Response } from "express";
 import { logger } from "../lib/logger";
 import { getCrawl, saveCrawl } from "../lib/crawl-redis";
-import * as Sentry from "@sentry/node";
 import { configDotenv } from "dotenv";
 import { crawlGroup } from "../services/worker/nuq";
 import { withErrorHandler } from "./error-wrapper";
@@ -37,7 +36,6 @@ export const crawlCancelController = withErrorHandler(async (
       status: "cancelled",
     });
   } catch (error) {
-    Sentry.captureException(error);
     throw error;
   }
 });

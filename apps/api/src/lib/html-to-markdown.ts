@@ -1,13 +1,29 @@
 import koffi from "koffi";
+import { platform } from "os";
+import { join } from "path";
 import { config } from "../config";
-import "../services/sentry";
-import * as Sentry from "@sentry/node";
 import { logger } from "./logger";
 import type { Logger } from "winston";
 import { stat } from "fs/promises";
-import { HTML_TO_MARKDOWN_PATH } from "../natives";
-import { convertHTMLToMarkdownWithHttpService } from "./html-to-markdown-client";
 import { postProcessMarkdown } from "@lingcrawl/lingcrawl-rs";
+
+const EXTENSIONS = {
+  win32: ".dll",
+  darwin: ".dylib",
+  default: ".so",
+} as const;
+
+const currentPlatform = platform();
+const isWindows = currentPlatform === "win32";
+const extension =
+  EXTENSIONS[currentPlatform as keyof typeof EXTENSIONS] ?? EXTENSIONS.default;
+
+export const HTML_TO_MARKDOWN_PATH = join(
+  process.cwd(),
+  "sharedLibs",
+  "go-html-to-md",
+  `${isWindows ? "" : "lib"}html-to-markdown${extension}`,
+);
 
 // TODO: add a timeout to the Go parser
 
@@ -65,29 +81,7 @@ export async function parseMarkdown(
   const contextLogger = context?.logger || logger;
   const requestId = context?.requestId;
 
-  // Try HTTP service first if enabled
-  if (config.HTML_TO_MARKDOWN_SERVICE_URL) {
-    try {
-      let markdownContent = await convertHTMLToMarkdownWithHttpService(html, {
-        logger: contextLogger,
-        requestId,
-      });
-      markdownContent = await postProcessMarkdown(markdownContent);
-      return markdownContent;
-    } catch (error) {
-      contextLogger.error(
-        "Error converting HTML to Markdown with HTTP service, falling back to original parser",
-        { error },
-      );
-      Sentry.captureException(error, {
-        tags: {
-          fallback: "original_parser",
-          ...(requestId ? { request_id: requestId } : {}),
-        },
-      });
-    }
-  }
-
+  // Try Go native parser first if enabled
   try {
     if (config.USE_GO_MARKDOWN_PARSER) {
       const converter = await GoMarkdownConverter.getInstance();
@@ -100,11 +94,6 @@ export async function parseMarkdown(
       !(error instanceof Error) ||
       error.message !== "Go shared library not found"
     ) {
-      Sentry.captureException(error, {
-        tags: {
-          ...(requestId ? { request_id: requestId } : {}),
-        },
-      });
       contextLogger.error(
         `Error converting HTML to Markdown with Go parser: ${error}`,
       );

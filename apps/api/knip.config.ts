@@ -9,7 +9,6 @@ const config: KnipConfig = {
   },
   ignore: [
     "native/**",
-    "src/scraper/scrapeURL/engines/fire-engine/branding-script/**",
   ],
   ignoreDependencies: ["openai", "undici-types"],
 };

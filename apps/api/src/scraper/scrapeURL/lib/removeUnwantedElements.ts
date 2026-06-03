@@ -4,7 +4,7 @@ import { AnyNode, Cheerio, load } from "cheerio"; // rustified
 import { ScrapeOptions } from "../../../controllers/types";
 import { transformHtml } from "@lingcrawl/lingcrawl-rs";
 import { logger } from "../../../lib/logger";
-import { queryOMCESignatures } from "../../../services/index";
+// queryOMCESignatures removed with index service
 
 const excludeNonMainTags = [
   "header",
@@ -71,23 +71,8 @@ export const htmlTransform = async (
   url: string,
   scrapeOptions: ScrapeOptions,
 ) => {
-  let omceSignatures: string[] | undefined = undefined;
-
-  if (scrapeOptions.__experimental_omce) {
-    try {
-      const hostname =
-        scrapeOptions.__experimental_omceDomain || new URL(url).hostname;
-      omceSignatures = await queryOMCESignatures(hostname);
-      logger.info("Got OMCE signatures", { signatures: omceSignatures.length });
-    } catch (error) {
-      logger.warn("Failed to get omce signatures.", {
-        error,
-        scrapeURL: url,
-        module: "scrapeURL",
-        method: "htmlTransform",
-      });
-    }
-  }
+  // OMCE signatures removed with index service
+  const omceSignatures: string[] | undefined = undefined;
 
   try {
     return await transformHtml({

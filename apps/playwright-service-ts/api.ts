@@ -15,7 +15,7 @@ app.use(express.json());
 
 const BLOCK_MEDIA = (process.env.BLOCK_MEDIA || 'False').toUpperCase() === 'TRUE';
 const MAX_CONCURRENT_PAGES = Math.max(1, Number.parseInt(process.env.MAX_CONCURRENT_PAGES ?? '10', 10) || 10);
-const ALLOW_LOCAL_WEBHOOKS = (process.env.ALLOW_LOCAL_WEBHOOKS || 'False').toUpperCase() === 'TRUE';
+const ALLOW_LOCAL_NETWORK = (process.env.ALLOW_LOCAL_NETWORK || 'False').toUpperCase() === 'TRUE';
 const DNS_CACHE_TTL_MS = 30_000;
 
 const PROXY_SERVER = process.env.PROXY_SERVER || null;
@@ -70,7 +70,7 @@ const assertSafeTargetUrl = async (urlString: string): Promise<void> => {
     throw new InsecureConnectionError(urlString, `unsupported protocol "${parsedUrl.protocol}"`);
   }
 
-  if (ALLOW_LOCAL_WEBHOOKS) {
+  if (ALLOW_LOCAL_NETWORK) {
     return;
   }
 

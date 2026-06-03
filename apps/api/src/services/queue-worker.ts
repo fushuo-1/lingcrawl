@@ -1,37 +1,15 @@
 import "dotenv/config";
 import { config } from "../config";
-import "./sentry";
-import { setSentryServiceTag } from "./sentry";
-import * as Sentry from "@sentry/node";
-import {
-  getRedisConnection,
-} from "./queue-service";
-import { Job, Queue, Worker } from "bullmq";
 import { logger as _logger } from "../lib/logger";
-import systemMonitor from "./system-monitor";
-import { v7 as uuidv7 } from "uuid";
 import { configDotenv } from "dotenv";
 import Express from "express";
-import { robustFetch } from "../scraper/scrapeURL/lib/fetch";
 import { initializeBlocklist } from "../scraper/WebScraper/utils/blocklist";
 import { initializeEngineForcing } from "../scraper/WebScraper/utils/engine-forcing";
 import { crawlFinishedQueue, NuQJob, scrapeQueue } from "./worker/nuq";
 import { finishCrawlSuper } from "./worker/crawl-logic";
 import { getCrawl } from "../lib/crawl-redis";
-import { TransportableError } from "../lib/error";
 
 configDotenv();
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const jobLockExtendInterval = config.JOB_LOCK_EXTEND_INTERVAL;
-const jobLockExtensionTime = config.JOB_LOCK_EXTENSION_TIME;
-
-const cantAcceptConnectionInterval = config.CANT_ACCEPT_CONNECTION_INTERVAL;
-const connectionMonitorInterval = config.CONNECTION_MONITOR_INTERVAL;
-const gotJobInterval = config.CONNECTION_MONITOR_INTERVAL;
-
-const runningJobs: Set<string> = new Set();
 
 async function processFinishCrawlJobInternal(_job: NuQJob) {
   const job = await crawlFinishedQueue.getJob(_job.id);
@@ -64,7 +42,6 @@ async function processFinishCrawlJobInternal(_job: NuQJob) {
 }
 
 let isShuttingDown = false;
-let isWorkerStalled = false;
 
 if (require.main === module) {
   process.on("SIGINT", () => {
@@ -77,76 +54,6 @@ if (require.main === module) {
     isShuttingDown = true;
   });
 }
-
-let cantAcceptConnectionCount = 0;
-
-const workerFun = async (
-  queue: Queue,
-  processJobInternal: (token: string, job: Job) => Promise<any>,
-) => {
-  const logger = _logger.child({ module: "queue-worker", method: "workerFun" });
-
-  const worker = new Worker(queue.name, null, {
-    connection: getRedisConnection(),
-    lockDuration: 60 * 1000, // 60 seconds
-    stalledInterval: 60 * 1000, // 60 seconds
-    maxStalledCount: 10, // 10 times
-  });
-
-  worker.startStalledCheckTimer();
-
-  const monitor = await systemMonitor;
-
-  while (true) {
-    if (isShuttingDown) {
-      _logger.info("No longer accepting new jobs. SIGINT");
-      break;
-    }
-    const token = uuidv7();
-    const canAcceptConnection = await monitor.acceptConnection();
-    if (!canAcceptConnection) {
-      console.log("Can't accept connection due to RAM/CPU load");
-      logger.info("Can't accept connection due to RAM/CPU load");
-      cantAcceptConnectionCount++;
-
-      isWorkerStalled = cantAcceptConnectionCount >= 25;
-
-      if (isWorkerStalled) {
-        logger.error("WORKER STALLED", {
-          cpuUsage: await monitor.checkCpuUsage(),
-          memoryUsage: await monitor.checkMemoryUsage(),
-        });
-      }
-
-      await sleep(cantAcceptConnectionInterval); // more sleep
-      continue;
-    } else if (!currentLiveness) {
-      logger.info("Not accepting jobs because the liveness check failed");
-
-      await sleep(cantAcceptConnectionInterval);
-      continue;
-    } else {
-      cantAcceptConnectionCount = 0;
-    }
-
-    const job = await worker.getNextJob(token);
-    if (job) {
-      if (job.id) {
-        runningJobs.add(job.id);
-      }
-
-      processJobInternal(token, job).finally(() => {
-        if (job.id) {
-          runningJobs.delete(job.id);
-        }
-      });
-
-      await sleep(gotJobInterval);
-    } else {
-      await sleep(connectionMonitorInterval);
-    }
-  }
-};
 
 const crawlFinishWorker = async () => {
   const __logger = _logger.child({
@@ -242,34 +149,8 @@ let currentLiveness: boolean = true;
 
 app.get("/liveness", (req, res) => {
   _logger.info("Liveness endpoint hit");
-  if (config.USE_DB_AUTHENTICATION) {
-    // networking check for Kubernetes environments
-    const host = config.LINGCRAWL_APP_HOST;
-    const port = config.LINGCRAWL_APP_PORT;
-    const scheme = config.LINGCRAWL_APP_SCHEME;
-
-    robustFetch({
-      url: `${scheme}://${host}:${port}`,
-      method: "GET",
-      mock: null,
-      logger: _logger,
-      abort: AbortSignal.timeout(5000),
-      ignoreResponse: true,
-      useCacheableLookup: false,
-    })
-      .then(() => {
-        currentLiveness = true;
-        res.status(200).json({ ok: true });
-      })
-      .catch(e => {
-        _logger.error("WORKER NETWORKING CHECK FAILED", { error: e });
-        currentLiveness = false;
-        res.status(500).json({ ok: false });
-      });
-  } else {
-    currentLiveness = true;
-    res.status(200).json({ ok: true });
-  }
+  currentLiveness = true;
+  res.status(200).json({ ok: true });
 });
 
 const workerPort = config.WORKER_PORT || config.PORT;
@@ -278,8 +159,6 @@ app.listen(workerPort, () => {
 });
 
 (async () => {
-  setSentryServiceTag("queue-worker");
-
   await initializeBlocklist().catch(e => {
     _logger.error("Failed to initialize blocklist", { error: e });
     process.exit(1);
@@ -291,12 +170,6 @@ app.listen(workerPort, () => {
     crawlFinishWorker(),
   ]);
 
-  _logger.info("All workers exited. Waiting for all jobs to finish...");
-
-  while (runningJobs.size > 0) {
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-
-  _logger.info("All jobs finished. Shutting down...");
+  _logger.info("All workers exited. Shutting down...");
   process.exit(0);
 })();

@@ -7,7 +7,6 @@ import {
 import { getCrawl } from "../../lib/crawl-redis";
 import { getJobs } from "../../controllers/crawl-status";
 import { logCrawl, logBatchScrape } from "../logging/log_job";
-import { createWebhookSender, WebhookEvent } from "../webhook/index";
 import type { NuQJob } from "./nuq";
 
 export async function finishCrawlSuper(job: NuQJob<any>) {
@@ -88,37 +87,6 @@ export async function finishCrawlSuper(job: NuQJob<any>) {
         false,
       );
     }
-
-    // v0 web hooks
-    if (!job.data.v1) {
-      const sender = await createWebhookSender({
-        teamId: job.data.team_id,
-        jobId: crawlId,
-        webhook: job.data.webhook,
-        v0: true,
-      });
-      if (sender) {
-        const documents = fullDocs.map((doc: any) => ({
-          content: {
-            content: doc?.content ?? doc?.rawHtml ?? doc?.markdown ?? "",
-            markdown: doc?.markdown,
-            metadata: doc?.metadata ?? {},
-          },
-          source: doc?.metadata?.sourceURL ?? doc?.url ?? "",
-        }));
-        if (sc.crawlerOptions !== null) {
-          sender.send(WebhookEvent.CRAWL_COMPLETED, {
-            success: true,
-            data: documents,
-          });
-        } else {
-          sender.send(WebhookEvent.BATCH_SCRAPE_COMPLETED, {
-            success: true,
-            data: documents,
-          });
-        }
-      }
-    }
   } else {
     const num_docs = await getDoneJobsOrderedLength(crawlId);
 
@@ -150,29 +118,6 @@ export async function finishCrawlSuper(job: NuQJob<any>) {
         },
         false,
       );
-    }
-
-    // v1 web hooks
-    if (job.data.v1 && job.data.webhook) {
-      const sender = await createWebhookSender({
-        teamId: job.data.team_id,
-        jobId: crawlId,
-        webhook: job.data.webhook,
-        v0: false,
-      });
-      if (sender) {
-        if (sc.crawlerOptions !== null) {
-          sender.send(WebhookEvent.CRAWL_COMPLETED, {
-            success: true,
-            data: [],
-          });
-        } else {
-          sender.send(WebhookEvent.BATCH_SCRAPE_COMPLETED, {
-            success: true,
-            data: [],
-          });
-        }
-      }
     }
   }
 }

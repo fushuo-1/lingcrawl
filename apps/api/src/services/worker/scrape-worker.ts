@@ -1,7 +1,5 @@
 import { configDotenv } from "dotenv";
 import { config } from "../../config";
-import * as Sentry from "@sentry/node";
-import { applyZdrScope, captureExceptionWithZdrCheck } from "../sentry";
 import http from "http";
 import https from "https";
 
@@ -36,7 +34,6 @@ import { getJobPriority } from "../../lib/job-priority";
 import { Document, scrapeOptions } from "../../controllers/types";
 import { hasFormatOfType } from "../../lib/format-utils";
 import { getACUCTeam } from "../../controllers/auth";
-import { createWebhookSender, WebhookEvent } from "../webhook/index";
 import { CustomError } from "../../lib/custom-error";
 import { startWebScraperPipeline } from "../../main/runWebScraper";
 import { normalizeUrlOnlyHostname } from "../../lib/canonical-url";
@@ -62,18 +59,10 @@ import {
   ScrapeJobSingleUrls,
 } from "../../types";
 import { scrapeSitemap } from "../../scraper/crawler/sitemap";
-import {
-  withTraceContextAsync,
-  withSpan,
-  setSpanAttributes,
-} from "../../lib/otel-tracer";
 import { ScrapeUrlResponse } from "../../scraper/scrapeURL";
 import { logScrape } from "../logging/log_job";
 
 configDotenv();
-
-const jobLockExtendInterval = config.JOB_LOCK_EXTEND_INTERVAL;
-const jobLockExtensionTime = config.JOB_LOCK_EXTENSION_TIME;
 
 if (require.main === module) {
   cacheableLookup.install(http.globalAgent);
@@ -230,7 +219,6 @@ async function handleCrawlResult(
                 integration: job.data.integration,
                 crawl_id: crawlId,
                 requestId: job.data.requestId,
-                webhook: job.data.webhook,
                 zeroDataRetention: job.data.zeroDataRetention,
                 apiKeyId: job.data.apiKeyId,
               },
@@ -332,12 +320,10 @@ async function handleSingleResult(
   );
 
   if (job.data.skipNuq) {
-    // doesn't use GCS for result retrieval, safe to not await
     logScrapePromise.catch(err =>
       logger.warn("Background scrape log failed", { error: err }),
     );
   } else {
-    // v0 - must await because waitForJob reads from GCS
     await logScrapePromise;
   }
 }
@@ -392,12 +378,7 @@ async function handleError(
 
     // Filter out TransportableErrors (flow control)
     if (!(error instanceof TransportableError)) {
-      captureExceptionWithZdrCheck(error, {
-        data: {
-          job: job.id,
-        },
-        extra: { zeroDataRetention: job.data.zeroDataRetention ?? false },
-      });
+      // Error already logged below
     }
 
     if (error instanceof CustomError) {
@@ -407,53 +388,6 @@ async function handleError(
     logger.error(error);
     if ((error as any).stack) {
       logger.error((error as any).stack);
-    }
-  }
-
-  if (job.data.crawl_id) {
-    const sender = await createWebhookSender({
-      teamId: job.data.team_id,
-      jobId: (job.data.crawl_id ?? job.id) as string,
-      webhook: job.data.webhook,
-      v0: false,
-    });
-
-    // at this point we don't have a document, send a minimal payload to let users identify the errored URL
-    const metadata = {
-      sourceURL: job.data.url,
-    } as any;
-
-    if (sender) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : typeof error === "string"
-            ? error
-            : JSON.stringify(error);
-
-      if (job.data.crawlerOptions !== null) {
-        sender.send(WebhookEvent.CRAWL_PAGE, {
-          success: false,
-          error: errorMessage,
-          data: [
-            {
-              metadata,
-            },
-          ],
-          scrapeId: job.id,
-        });
-      } else {
-        sender.send(WebhookEvent.BATCH_SCRAPE_PAGE, {
-          success: false,
-          error: errorMessage,
-          data: [
-            {
-              metadata,
-            },
-          ],
-          scrapeId: job.id,
-        });
-      }
     }
   }
 
@@ -493,7 +427,6 @@ async function processJob(job: NuQJob<ScrapeJobSingleUrls>) {
     teamId: job.data?.team_id ?? undefined,
     zeroDataRetention: job.data?.zeroDataRetention ?? false,
   });
-  applyZdrScope(job.data?.zeroDataRetention);
   logger.info(`🐂 Worker taking job ${job.id}`, { url: job.data.url });
   const start = job.data.startTime ?? Date.now();
   const remainingTime = job.data.scrapeOptions.timeout
@@ -687,7 +620,6 @@ async function addKickoffSitemapJob(
       integration: sourceJob.data.integration,
       crawl_id: sourceJob.data.crawl_id,
       requestId: sourceJob.data.requestId,
-      webhook: sourceJob.data.webhook,
       apiKeyId: sourceJob.data.apiKeyId,
     } satisfies ScrapeJobKickoffSitemap,
     jobId,
@@ -738,7 +670,6 @@ async function processKickoffJob(job: NuQJob<ScrapeJobKickoff>) {
         integration: job.data.integration,
         crawl_id: job.data.crawl_id,
         requestId: job.data.requestId,
-        webhook: job.data.webhook,
         isCrawlSourceScrape: true,
         zeroDataRetention: job.data.zeroDataRetention,
         apiKeyId: job.data.apiKeyId,
@@ -748,21 +679,6 @@ async function processKickoffJob(job: NuQJob<ScrapeJobKickoff>) {
     );
     logger.debug("Adding scrape job to BullMQ...", { jobId });
     await addCrawlJob(job.data.crawl_id, jobId, logger);
-
-    if (job.data.webhook) {
-      logger.debug("Calling webhook with crawl.started...", {
-        webhook: job.data.webhook,
-      });
-      const sender = await createWebhookSender({
-        teamId: job.data.team_id,
-        jobId: job.data.crawl_id,
-        webhook: job.data.webhook,
-        v0: false,
-      });
-      if (sender) {
-        sender.send(WebhookEvent.CRAWL_STARTED, { success: true });
-      }
-    }
 
     if (!sc.crawlerOptions.ignoreSitemap) {
       if (job.data.url.endsWith(".xml") || job.data.url.endsWith(".xml.gz")) {
@@ -825,7 +741,6 @@ async function processKickoffJob(job: NuQJob<ScrapeJobKickoff>) {
             crawl_id: job.data.crawl_id,
             requestId: job.data.requestId,
             sitemapped: true,
-            webhook: job.data.webhook,
             zeroDataRetention: job.data.zeroDataRetention,
             apiKeyId: job.data.apiKeyId,
           },
@@ -936,7 +851,6 @@ async function processKickoffSitemapJob(job: NuQJob<ScrapeJobKickoffSitemap>) {
           crawl_id: job.data.crawl_id,
           requestId: job.data.requestId,
           sitemapped: true,
-          webhook: job.data.webhook,
           zeroDataRetention:
             job.data.zeroDataRetention || (sc.zeroDataRetention ?? false),
           apiKeyId: job.data.apiKeyId,
@@ -998,24 +912,7 @@ export const processJobInternal = async (job: NuQJob<ScrapeJobData>) => {
     zeroDataRetention: job.data?.zeroDataRetention ?? false,
   });
 
-  // Restore trace context if available and execute within span
-  if (job.data.traceContext) {
-    return withTraceContextAsync(job.data.traceContext, () =>
-      withSpan("worker.scrape.process", async span => {
-        setSpanAttributes(span, {
-          "worker.job_id": job.id,
-          "worker.mode": job.data.mode,
-          "worker.team_id": job.data.team_id,
-          "worker.crawl_id": job.data.crawl_id || "none",
-          "worker.url": job.data.mode === "single_urls" ? job.data.url : "n/a",
-        });
-
-        return processJobWithTracing(job, logger);
-      }),
-    );
-  } else {
-    return processJobWithTracing(job, logger);
-  }
+  return processJobWithTracing(job, logger);
 };
 
 async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
@@ -1057,13 +954,8 @@ async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
             }
 
             try {
-              if (config.GCS_BUCKET_NAME && !job.data.skipNuq) {
-                logger.debug("Job succeeded -- putting null in Redis");
-                return null;
-              } else {
-                logger.debug("Job succeeded -- putting result in Redis");
-                return result.document;
-              }
+              logger.debug("Job succeeded -- putting result in Redis");
+              return result.document;
             } catch (e) {}
           } else {
             throw (result as any).error;
@@ -1082,11 +974,7 @@ async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
       error instanceof RacedRedirectError ||
       error instanceof ScrapeJobTimeoutError
     ) {
-      // These are expected flow control errors, don't send to Sentry
-    } else {
-      captureExceptionWithZdrCheck(error, {
-        extra: { zeroDataRetention: job.data.zeroDataRetention ?? false },
-      });
+      // Expected flow control errors
     }
 
     if (job.data.skipNuq) {

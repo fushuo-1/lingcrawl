@@ -1,5 +1,4 @@
 import * as fs from "fs/promises";
-import { config } from "../../../config";
 import * as path from "path";
 import { logger as _logger } from "../../../lib/logger";
 import { Logger } from "winston";
@@ -9,8 +8,6 @@ const loadMocksDirPath = path
   .replace("dist/", "");
 
 export async function saveMock(options: unknown, result: unknown) {
-  if (config.LINGCRAWL_SAVE_MOCKS !== true) return;
-
   await fs.mkdir(saveMocksDirPath, { recursive: true });
 
   const fileName = Date.now() + "-" + crypto.randomUUID() + ".json";

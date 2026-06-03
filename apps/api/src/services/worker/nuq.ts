@@ -2,7 +2,6 @@ import { Logger } from "winston";
 import { logger } from "../../lib/logger";
 import { Client, Pool } from "pg";
 import { type ScrapeJobData } from "../../types";
-import { withSpan, setSpanAttributes } from "../../lib/otel-tracer";
 import amqp from "amqplib";
 import { v5 as uuidv5, validate as isUUID } from "uuid";
 import { config } from "../../config";
@@ -444,42 +443,27 @@ class NuQ<JobData = any, JobReturnValue = any> {
     id: string,
     _logger = logger,
   ): Promise<NuQJob<JobData, JobReturnValue> | null> {
-    return withSpan("nuq.getJob", async span => {
-      setSpanAttributes(span, {
-        "nuq.queue_name": this.queueName,
-        "nuq.job_id": id,
+    const start = Date.now();
+    try {
+      const result = this.rowToJob(
+        (
+          await nuqPool.query(
+            `SELECT ${this.jobReturning.join(", ")} FROM ${this.queueName} WHERE ${this.queueName}.id = $1;`,
+            [id],
+          )
+        ).rows[0],
+      );
+
+      return result;
+    } finally {
+      const duration = Date.now() - start;
+      _logger.info("nuqGetJob metrics", {
+        module: "nuq/metrics",
+        method: "nuqGetJob",
+        duration,
+        scrapeId: id,
       });
-
-      const start = Date.now();
-      try {
-        const result = this.rowToJob(
-          (
-            await nuqPool.query(
-              `SELECT ${this.jobReturning.join(", ")} FROM ${this.queueName} WHERE ${this.queueName}.id = $1;`,
-              [id],
-            )
-          ).rows[0],
-        );
-
-        setSpanAttributes(span, {
-          "nuq.job_found": result !== null,
-          "nuq.job_status": result?.status,
-        });
-
-        return result;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        _logger.info("nuqGetJob metrics", {
-          module: "nuq/metrics",
-          method: "nuqGetJob",
-          duration,
-          scrapeId: id,
-        });
-      }
-    });
+    }
   }
 
   public async getJobs(
@@ -767,59 +751,42 @@ class NuQ<JobData = any, JobReturnValue = any> {
     data: JobData,
     options: NuQJobOptions,
   ): Promise<NuQJob<JobData, JobReturnValue>> {
-    return withSpan("nuq.addJob", async span => {
-      setSpanAttributes(span, {
-        "nuq.queue_name": this.queueName,
-        "nuq.job_id": id,
-        "nuq.priority": options.priority ?? 0,
-        "nuq.zero_data_retention": (data as any)?.zeroDataRetention ?? false,
-        "nuq.listenable": options.listenable ?? false,
+    const start = Date.now();
+    try {
+      const result = this.rowToJob(
+        (
+          await nuqPool.query(
+            `INSERT INTO ${this.queueName}${options.backlogged ? "_backlog" : ""} (id, data, priority, listen_channel_id, owner_id, group_id${options.backlogged ? ", times_out_at" : ""}) VALUES ($1, $2, $3, $4, $5, $6${options.backlogged ? ", $7" : ""}) RETURNING ${(options.backlogged ? this.jobBacklogReturning : this.jobReturning).join(", ")};`,
+            [
+              id,
+              data,
+              options.priority ?? 0,
+              options.listenable ? this.listenChannelId : null,
+              normalizeOwnerId(options.ownerId),
+              options.groupId ?? null,
+              ...(options.backlogged
+                ? [
+                    options.backloggedTimesOutAt
+                      ? options.backloggedTimesOutAt.toISOString()
+                      : null,
+                  ]
+                : []),
+            ],
+          )
+        ).rows[0],
+      )!;
+
+      return result;
+    } finally {
+      const duration = Date.now() - start;
+      logger.info("nuqAddJob metrics", {
+        module: "nuq/metrics",
+        method: "nuqAddJob",
+        duration,
+        scrapeId: id,
+        zeroDataRetention: (data as any)?.zeroDataRetention ?? false,
       });
-
-      const start = Date.now();
-      try {
-        const result = this.rowToJob(
-          (
-            await nuqPool.query(
-              `INSERT INTO ${this.queueName}${options.backlogged ? "_backlog" : ""} (id, data, priority, listen_channel_id, owner_id, group_id${options.backlogged ? ", times_out_at" : ""}) VALUES ($1, $2, $3, $4, $5, $6${options.backlogged ? ", $7" : ""}) RETURNING ${(options.backlogged ? this.jobBacklogReturning : this.jobReturning).join(", ")};`,
-              [
-                id,
-                data,
-                options.priority ?? 0,
-                options.listenable ? this.listenChannelId : null,
-                normalizeOwnerId(options.ownerId),
-                options.groupId ?? null,
-                ...(options.backlogged
-                  ? [
-                      options.backloggedTimesOutAt
-                        ? options.backloggedTimesOutAt.toISOString()
-                        : null,
-                    ]
-                  : []),
-              ],
-            )
-          ).rows[0],
-        )!;
-
-        setSpanAttributes(span, {
-          "nuq.job_created": true,
-        });
-
-        return result;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        logger.info("nuqAddJob metrics", {
-          module: "nuq/metrics",
-          method: "nuqAddJob",
-          duration,
-          scrapeId: id,
-          zeroDataRetention: (data as any)?.zeroDataRetention ?? false,
-        });
-      }
-    });
+    }
   }
 
   public async addJobIfNotExists(
@@ -827,59 +794,42 @@ class NuQ<JobData = any, JobReturnValue = any> {
     data: JobData,
     options: NuQJobOptions,
   ): Promise<NuQJob<JobData, JobReturnValue> | null> {
-    return withSpan("nuq.addJob", async span => {
-      setSpanAttributes(span, {
-        "nuq.queue_name": this.queueName,
-        "nuq.job_id": id,
-        "nuq.priority": options.priority ?? 0,
-        "nuq.zero_data_retention": (data as any)?.zeroDataRetention ?? false,
-        "nuq.listenable": options.listenable ?? false,
+    const start = Date.now();
+    try {
+      const result = this.rowToJob(
+        (
+          await nuqPool.query(
+            `INSERT INTO ${this.queueName}${options.backlogged ? "_backlog" : ""} (id, data, priority, listen_channel_id, owner_id, group_id${options.backlogged ? ", times_out_at" : ""}) VALUES ($1, $2, $3, $4, $5, $6${options.backlogged ? ", $7" : ""}) ON CONFLICT (id) DO NOTHING RETURNING ${(options.backlogged ? this.jobBacklogReturning : this.jobReturning).join(", ")};`,
+            [
+              id,
+              data,
+              options.priority ?? 0,
+              options.listenable ? this.listenChannelId : null,
+              normalizeOwnerId(options.ownerId),
+              options.groupId ?? null,
+              ...(options.backlogged
+                ? [
+                    options.backloggedTimesOutAt
+                      ? options.backloggedTimesOutAt.toISOString()
+                      : null,
+                  ]
+                : []),
+            ],
+          )
+        ).rows[0],
+      );
+
+      return result;
+    } finally {
+      const duration = Date.now() - start;
+      logger.info("nuqAddJob metrics", {
+        module: "nuq/metrics",
+        method: "nuqAddJob",
+        duration,
+        scrapeId: id,
+        zeroDataRetention: (data as any)?.zeroDataRetention ?? false,
       });
-
-      const start = Date.now();
-      try {
-        const result = this.rowToJob(
-          (
-            await nuqPool.query(
-              `INSERT INTO ${this.queueName}${options.backlogged ? "_backlog" : ""} (id, data, priority, listen_channel_id, owner_id, group_id${options.backlogged ? ", times_out_at" : ""}) VALUES ($1, $2, $3, $4, $5, $6${options.backlogged ? ", $7" : ""}) ON CONFLICT (id) DO NOTHING RETURNING ${(options.backlogged ? this.jobBacklogReturning : this.jobReturning).join(", ")};`,
-              [
-                id,
-                data,
-                options.priority ?? 0,
-                options.listenable ? this.listenChannelId : null,
-                normalizeOwnerId(options.ownerId),
-                options.groupId ?? null,
-                ...(options.backlogged
-                  ? [
-                      options.backloggedTimesOutAt
-                        ? options.backloggedTimesOutAt.toISOString()
-                        : null,
-                    ]
-                  : []),
-              ],
-            )
-          ).rows[0],
-        );
-
-        setSpanAttributes(span, {
-          "nuq.job_created": result !== null,
-        });
-
-        return result;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        logger.info("nuqAddJob metrics", {
-          module: "nuq/metrics",
-          method: "nuqAddJob",
-          duration,
-          scrapeId: id,
-          zeroDataRetention: (data as any)?.zeroDataRetention ?? false,
-        });
-      }
-    });
+    }
   }
 
   public async addJobs(
@@ -889,142 +839,126 @@ class NuQ<JobData = any, JobReturnValue = any> {
       options: NuQJobOptions;
     }>,
   ): Promise<NuQJob<JobData, JobReturnValue>[]> {
-    return withSpan("nuq.addJobs", async span => {
-      setSpanAttributes(span, {
-        "nuq.queue_name": this.queueName,
-        "nuq.jobs_count": jobs.length,
-      });
+    if (jobs.length === 0) {
+      return [];
+    }
 
-      if (jobs.length === 0) {
-        return [];
+    const start = Date.now();
+    try {
+      // Separate jobs into backlogged and non-backlogged groups
+      const regularJobs: typeof jobs = [];
+      const backloggedJobs: typeof jobs = [];
+
+      for (const job of jobs) {
+        if (job.options.backlogged) {
+          backloggedJobs.push(job);
+        } else {
+          regularJobs.push(job);
+        }
       }
 
-      const start = Date.now();
-      try {
-        // Separate jobs into backlogged and non-backlogged groups
-        const regularJobs: typeof jobs = [];
-        const backloggedJobs: typeof jobs = [];
+      const results: NuQJob<JobData, JobReturnValue>[] = [];
 
-        for (const job of jobs) {
-          if (job.options.backlogged) {
-            backloggedJobs.push(job);
-          } else {
-            regularJobs.push(job);
-          }
-        }
+      // Batch size: 6 params per job, stay well under PG's 65535 param limit
+      // 1000 jobs = 6000 params, leaving plenty of headroom
+      const BATCH_SIZE = 1000;
 
-        const results: NuQJob<JobData, JobReturnValue>[] = [];
+      // Helper function to build and execute bulk insert with batching
+      const bulkInsert = async (
+        jobsToInsert: typeof jobs,
+        tableSuffix: string,
+      ) => {
+        if (jobsToInsert.length === 0) return;
 
-        // Batch size: 6 params per job, stay well under PG's 65535 param limit
-        // 1000 jobs = 6000 params, leaving plenty of headroom
-        const BATCH_SIZE = 1000;
+        // Process in batches
+        for (
+          let offset = 0;
+          offset < jobsToInsert.length;
+          offset += BATCH_SIZE
+        ) {
+          const batch = jobsToInsert.slice(offset, offset + BATCH_SIZE);
 
-        // Helper function to build and execute bulk insert with batching
-        const bulkInsert = async (
-          jobsToInsert: typeof jobs,
-          tableSuffix: string,
-        ) => {
-          if (jobsToInsert.length === 0) return;
+          // Build the VALUES clause and parameters array
+          const valuesPlaceholders: string[] = [];
+          const params: any[] = [];
 
-          // Process in batches
-          for (
-            let offset = 0;
-            offset < jobsToInsert.length;
-            offset += BATCH_SIZE
-          ) {
-            const batch = jobsToInsert.slice(offset, offset + BATCH_SIZE);
+          const columns = [
+            "id",
+            "data",
+            "priority",
+            "listen_channel_id",
+            "owner_id",
+            "group_id",
+            ...(tableSuffix === "_backlog" ? ["times_out_at"] : []),
+          ];
 
-            // Build the VALUES clause and parameters array
-            const valuesPlaceholders: string[] = [];
-            const params: any[] = [];
+          for (let i = 0; i < batch.length; i++) {
+            const job = batch[i];
+            const baseIdx = i * columns.length + 1;
 
-            const columns = [
-              "id",
-              "data",
-              "priority",
-              "listen_channel_id",
-              "owner_id",
-              "group_id",
-              ...(tableSuffix === "_backlog" ? ["times_out_at"] : []),
-            ];
-
-            for (let i = 0; i < batch.length; i++) {
-              const job = batch[i];
-              const baseIdx = i * columns.length + 1;
-
-              valuesPlaceholders.push(
-                `(${new Array(columns.length)
-                  .fill(0)
-                  .map((_, i) => "$" + (baseIdx + i))
-                  .join(", ")})`,
-              );
-
-              params.push(
-                ...[
-                  job.id,
-                  job.data,
-                  job.options.priority ?? 0,
-                  job.options.listenable ? this.listenChannelId : null,
-                  normalizeOwnerId(job.options.ownerId),
-                  job.options.groupId ?? null,
-                  ...(tableSuffix === "_backlog"
-                    ? [
-                        job.options.backloggedTimesOutAt
-                          ? job.options.backloggedTimesOutAt.toISOString()
-                          : null,
-                      ]
-                    : []),
-                ],
-              );
-            }
-
-            const query = `INSERT INTO ${this.queueName}${tableSuffix} (${columns.join(", ")}) VALUES ${valuesPlaceholders.join(", ")} RETURNING ${(tableSuffix === "_backlog" ? this.jobBacklogReturning : this.jobReturning).join(", ")};`;
-
-            const result = await nuqPool.query(query, params);
-
-            // Convert rows to jobs and maintain order
-            const jobMap = new Map(
-              result.rows.map(row => [
-                row.id,
-                this.rowToJob(row, tableSuffix === "_backlog")!,
-              ]),
+            valuesPlaceholders.push(
+              `(${new Array(columns.length)
+                .fill(0)
+                .map((_, i) => "$" + (baseIdx + i))
+                .join(", ")})`,
             );
 
-            for (const job of batch) {
-              const insertedJob = jobMap.get(job.id);
-              if (insertedJob) {
-                results.push(insertedJob);
-              }
+            params.push(
+              ...[
+                job.id,
+                job.data,
+                job.options.priority ?? 0,
+                job.options.listenable ? this.listenChannelId : null,
+                normalizeOwnerId(job.options.ownerId),
+                job.options.groupId ?? null,
+                ...(tableSuffix === "_backlog"
+                  ? [
+                      job.options.backloggedTimesOutAt
+                        ? job.options.backloggedTimesOutAt.toISOString()
+                        : null,
+                    ]
+                  : []),
+              ],
+            );
+          }
+
+          const query = `INSERT INTO ${this.queueName}${tableSuffix} (${columns.join(", ")}) VALUES ${valuesPlaceholders.join(", ")} RETURNING ${(tableSuffix === "_backlog" ? this.jobBacklogReturning : this.jobReturning).join(", ")};`;
+
+          const result = await nuqPool.query(query, params);
+
+          // Convert rows to jobs and maintain order
+          const jobMap = new Map(
+            result.rows.map(row => [
+              row.id,
+              this.rowToJob(row, tableSuffix === "_backlog")!,
+            ]),
+          );
+
+          for (const job of batch) {
+            const insertedJob = jobMap.get(job.id);
+            if (insertedJob) {
+              results.push(insertedJob);
             }
           }
-        };
+        }
+      };
 
-        // Insert regular jobs
-        await bulkInsert(regularJobs, "");
+      // Insert regular jobs
+      await bulkInsert(regularJobs, "");
 
-        // Insert backlogged jobs
-        await bulkInsert(backloggedJobs, "_backlog");
+      // Insert backlogged jobs
+      await bulkInsert(backloggedJobs, "_backlog");
 
-        setSpanAttributes(span, {
-          "nuq.jobs_created": results.length,
-          "nuq.regular_jobs_count": regularJobs.length,
-          "nuq.backlogged_jobs_count": backloggedJobs.length,
-        });
-
-        return results;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        logger.info("nuqAddJobs metrics", {
-          module: "nuq/metrics",
-          method: "nuqAddJobs",
-          duration,
-          jobsCount: jobs.length,
-        });
-      }
-    });
+      return results;
+    } finally {
+      const duration = Date.now() - start;
+      logger.info("nuqAddJobs metrics", {
+        module: "nuq/metrics",
+        method: "nuqAddJobs",
+        duration,
+        jobsCount: jobs.length,
+      });
+    }
   }
 
   public async promoteJobFromBacklogOrAdd(
@@ -1032,60 +966,47 @@ class NuQ<JobData = any, JobReturnValue = any> {
     data: JobData,
     options: NuQJobOptions,
   ): Promise<NuQJob<JobData, JobReturnValue> | null> {
-    return withSpan("nuq.promoteJobFromBacklogOrAdd", async span => {
-      setSpanAttributes(span, {
-        "nuq.queue_name": this.queueName,
-        "nuq.job_id": id,
-        "nuq.priority": options.priority ?? 0,
-        "nuq.zero_data_retention": (data as any)?.zeroDataRetention ?? false,
-        "nuq.listenable": options.listenable ?? false,
-      });
+    const start = Date.now();
+    try {
+      const result = this.rowToJob(
+        (
+          await nuqPool.query(
+            `
+              WITH ins AS (
+                INSERT INTO ${this.queueName} (id, data, created_at, priority, listen_channel_id, owner_id, group_id)
+                SELECT b.id, b.data, b.created_at, b.priority, b.listen_channel_id, b.owner_id, b.group_id
+                FROM ${this.queueName}_backlog b
+                WHERE b.id = $1
+                LIMIT 1
+                ON CONFLICT (id) DO NOTHING
+                RETURNING ${this.jobReturning.join(", ")}
+              ), del AS (
+                DELETE FROM ${this.queueName}_backlog
+                WHERE id = $1
+              )
+              SELECT * FROM ins
+            `,
+            [id],
+          )
+        ).rows[0],
+      );
 
-      const start = Date.now();
-      try {
-        const result = this.rowToJob(
-          (
-            await nuqPool.query(
-              `
-                WITH ins AS (
-                  INSERT INTO ${this.queueName} (id, data, created_at, priority, listen_channel_id, owner_id, group_id)
-                  SELECT b.id, b.data, b.created_at, b.priority, b.listen_channel_id, b.owner_id, b.group_id
-                  FROM ${this.queueName}_backlog b
-                  WHERE b.id = $1
-                  LIMIT 1
-                  ON CONFLICT (id) DO NOTHING
-                  RETURNING ${this.jobReturning.join(", ")}
-                ), del AS (
-                  DELETE FROM ${this.queueName}_backlog
-                  WHERE id = $1
-                )
-                SELECT * FROM ins
-              `,
-              [id],
-            )
-          ).rows[0],
-        );
-
-        if (!result) {
-          return await this.addJobIfNotExists(id, data, {
-            ...options,
-            backlogged: false,
-          });
-        }
-
-        return result;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        logger.info("nuqPromoteJobFromBacklogOrAdd metrics", {
-          module: "nuq/metrics",
-          method: "nuqPromoteJobFromBacklogOrAdd",
-          duration,
+      if (!result) {
+        return await this.addJobIfNotExists(id, data, {
+          ...options,
+          backlogged: false,
         });
       }
-    });
+
+      return result;
+    } finally {
+      const duration = Date.now() - start;
+      logger.info("nuqPromoteJobFromBacklogOrAdd metrics", {
+        module: "nuq/metrics",
+        method: "nuqPromoteJobFromBacklogOrAdd",
+        duration,
+      });
+    }
   }
 
   private readonly nuqWaitMode =
@@ -1098,107 +1019,91 @@ class NuQ<JobData = any, JobReturnValue = any> {
     timeout: number | null,
     _logger: Logger = logger,
   ): Promise<JobReturnValue> {
-    return withSpan("nuq.waitForJob", async span => {
-      setSpanAttributes(span, {
-        "nuq.queue_name": this.queueName,
-        "nuq.job_id": id,
-        "nuq.timeout": timeout ?? undefined,
-        "nuq.wait_mode": this.nuqWaitMode,
-      });
+    const startTime = Date.now();
 
-      const startTime = Date.now();
+    const done = new Promise<JobReturnValue>(
+      (async (resolve, reject) => {
+        if (this.nuqWaitMode === "listen") {
+          let timer: NodeJS.Timeout | null = null;
+          if (timeout !== null) {
+            timer = setTimeout(
+              (() => {
+                this.removeListener(id, listener);
+                reject(new Error("Timed out"));
+              }).bind(this),
+              timeout,
+            );
+          }
 
-      const done = new Promise<JobReturnValue>(
-        (async (resolve, reject) => {
-          if (this.nuqWaitMode === "listen") {
-            let timer: NodeJS.Timeout | null = null;
-            if (timeout !== null) {
-              timer = setTimeout(
-                (() => {
-                  this.removeListener(id, listener);
-                  reject(new Error("Timed out"));
-                }).bind(this),
-                timeout,
-              );
-            }
-
-            const listener = async function (_msg: "completed" | "failed") {
-              if (timer) clearTimeout(timer);
-              const job = await this.getJob(id, _logger);
-              if (!job) {
-                reject(new Error("Job raced out while waiting for it"));
+          const listener = async function (_msg: "completed" | "failed") {
+            if (timer) clearTimeout(timer);
+            const job = await this.getJob(id, _logger);
+            if (!job) {
+              reject(new Error("Job raced out while waiting for it"));
+            } else {
+              if (job.status === "completed") {
+                resolve(job.returnvalue!);
               } else {
-                if (job.status === "completed") {
-                  resolve(job.returnvalue!);
-                } else {
-                  reject(new Error(job.failedReason!));
-                }
+                reject(new Error(job.failedReason!));
               }
-            }.bind(this);
-
-            try {
-              await this.addListener(id, listener);
-            } catch (e) {
-              reject(e);
             }
+          }.bind(this);
 
+          try {
+            await this.addListener(id, listener);
+          } catch (e) {
+            reject(e);
+          }
+
+          try {
+            const job = await this.getJob(id, _logger);
+            if (job && ["completed", "failed"].includes(job.status)) {
+              this.removeListener(id, listener);
+              if (timer) clearTimeout(timer);
+              if (job.status === "completed") {
+                resolve(job.returnvalue!);
+              } else {
+                reject(new Error(job.failedReason!));
+              }
+              return;
+            }
+          } catch (e) {
+            _logger.warn("nuqGetJob ensure check failed", {
+              module: "nuq",
+              method: "nuqWaitForJob",
+              error: e,
+              scrapeId: id,
+            });
+          }
+        } else {
+          const timeoutAt = timeout !== null ? Date.now() + timeout : null;
+          const poll = async function poll() {
             try {
               const job = await this.getJob(id, _logger);
               if (job && ["completed", "failed"].includes(job.status)) {
-                this.removeListener(id, listener);
-                if (timer) clearTimeout(timer);
                 if (job.status === "completed") {
-                  resolve(job.returnvalue!);
+                  return resolve(job.returnvalue!);
                 } else {
-                  reject(new Error(job.failedReason!));
+                  return reject(new Error(job.failedReason!));
                 }
-                return;
               }
             } catch (e) {
-              _logger.warn("nuqGetJob ensure check failed", {
-                module: "nuq",
-                method: "nuqWaitForJob",
-                error: e,
-                scrapeId: id,
-              });
+              return reject(e);
             }
-          } else {
-            const timeoutAt = timeout !== null ? Date.now() + timeout : null;
-            const poll = async function poll() {
-              try {
-                const job = await this.getJob(id, _logger);
-                if (job && ["completed", "failed"].includes(job.status)) {
-                  if (job.status === "completed") {
-                    return resolve(job.returnvalue!);
-                  } else {
-                    return reject(new Error(job.failedReason!));
-                  }
-                }
-              } catch (e) {
-                return reject(e);
-              }
 
-              if (timeoutAt && Date.now() > timeoutAt) {
-                return reject(new Error("Timed out"));
-              }
+            if (timeoutAt && Date.now() > timeoutAt) {
+              return reject(new Error("Timed out"));
+            }
 
-              setTimeout(poll.bind(this), 500);
-            }.bind(this);
+            setTimeout(poll.bind(this), 500);
+          }.bind(this);
 
-            poll();
-          }
-        }).bind(this),
-      );
+          poll();
+        }
+      }).bind(this),
+    );
 
-      const result = await done;
-
-      setSpanAttributes(span, {
-        "nuq.wait_duration_ms": Date.now() - startTime,
-        "nuq.wait_success": true,
-      });
-
-      return result;
-    });
+    return done;
   }
 
   // === Prefetch
@@ -1324,55 +1229,41 @@ class NuQ<JobData = any, JobReturnValue = any> {
     returnvalue: any | null,
     _logger: Logger = logger,
   ): Promise<boolean> {
-    return withSpan("nuq.jobFinish", async span => {
-      setSpanAttributes(span, {
-        "nuq.queue_name": this.queueName,
-        "nuq.job_id": id,
-      });
+    const start = Date.now();
+    try {
+      const result = await nuqPool.query(
+        `UPDATE ${this.queueName} SET status = 'completed'::nuq.job_status, lock = null, locked_at = null, finished_at = now(), returnvalue = $3 WHERE id = $1 AND lock = $2 RETURNING id, listen_channel_id;`,
+        [id, lock, returnvalue],
+      );
 
-      const start = Date.now();
-      try {
-        const result = await nuqPool.query(
-          `UPDATE ${this.queueName} SET status = 'completed'::nuq.job_status, lock = null, locked_at = null, finished_at = now(), returnvalue = $3 WHERE id = $1 AND lock = $2 RETURNING id, listen_channel_id;`,
-          [id, lock, returnvalue],
-        );
+      const success = result.rowCount !== 0;
 
-        const success = result.rowCount !== 0;
-
-        if (success) {
-          const job = result.rows[0];
-          if (this.nuqWaitMode === "listen" && !config.NUQ_RABBITMQ_URL) {
-            await nuqPool.query(`SELECT pg_notify('${this.queueName}', $1);`, [
-              job.id + "|completed",
-            ]);
-          } else if (config.NUQ_RABBITMQ_URL && job.listen_channel_id) {
-            await this.sendJobEnd(
-              job.id,
-              "completed",
-              job.listen_channel_id,
-              _logger,
-            );
-          }
+      if (success) {
+        const job = result.rows[0];
+        if (this.nuqWaitMode === "listen" && !config.NUQ_RABBITMQ_URL) {
+          await nuqPool.query(`SELECT pg_notify('${this.queueName}', $1);`, [
+            job.id + "|completed",
+          ]);
+        } else if (config.NUQ_RABBITMQ_URL && job.listen_channel_id) {
+          await this.sendJobEnd(
+            job.id,
+            "completed",
+            job.listen_channel_id,
+            _logger,
+          );
         }
-
-        setSpanAttributes(span, {
-          "nuq.job_finished": success,
-        });
-
-        return success;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        _logger.info("nuqJobFinish metrics", {
-          module: "nuq/metrics",
-          method: "nuqJobFinish",
-          duration,
-          scrapeId: id,
-        });
       }
-    });
+
+      return success;
+    } finally {
+      const duration = Date.now() - start;
+      _logger.info("nuqJobFinish metrics", {
+        module: "nuq/metrics",
+        method: "nuqJobFinish",
+        duration,
+        scrapeId: id,
+      });
+    }
   }
 
   public async jobFail(
@@ -1381,56 +1272,41 @@ class NuQ<JobData = any, JobReturnValue = any> {
     failedReason: string,
     _logger: Logger = logger,
   ): Promise<boolean> {
-    return withSpan("nuq.jobFail", async span => {
-      setSpanAttributes(span, {
-        "nuq.queue_name": this.queueName,
-        "nuq.job_id": id,
-        "nuq.failed_reason": failedReason,
-      });
+    const start = Date.now();
+    try {
+      const result = await nuqPool.query(
+        `UPDATE ${this.queueName} SET status = 'failed'::nuq.job_status, lock = null, locked_at = null, finished_at = now(), failedreason = $3 WHERE id = $1 AND lock = $2 RETURNING id, listen_channel_id;`,
+        [id, lock, failedReason],
+      );
 
-      const start = Date.now();
-      try {
-        const result = await nuqPool.query(
-          `UPDATE ${this.queueName} SET status = 'failed'::nuq.job_status, lock = null, locked_at = null, finished_at = now(), failedreason = $3 WHERE id = $1 AND lock = $2 RETURNING id, listen_channel_id;`,
-          [id, lock, failedReason],
-        );
+      const success = result.rowCount !== 0;
 
-        const success = result.rowCount !== 0;
-
-        if (success) {
-          const job = result.rows[0];
-          if (this.nuqWaitMode === "listen" && !config.NUQ_RABBITMQ_URL) {
-            await nuqPool.query(`SELECT pg_notify('${this.queueName}', $1);`, [
-              job.id + "|failed",
-            ]);
-          } else if (config.NUQ_RABBITMQ_URL && job.listen_channel_id) {
-            await this.sendJobEnd(
-              job.id,
-              "failed",
-              job.listen_channel_id,
-              _logger,
-            );
-          }
+      if (success) {
+        const job = result.rows[0];
+        if (this.nuqWaitMode === "listen" && !config.NUQ_RABBITMQ_URL) {
+          await nuqPool.query(`SELECT pg_notify('${this.queueName}', $1);`, [
+            job.id + "|failed",
+          ]);
+        } else if (config.NUQ_RABBITMQ_URL && job.listen_channel_id) {
+          await this.sendJobEnd(
+            job.id,
+            "failed",
+            job.listen_channel_id,
+            _logger,
+          );
         }
-
-        setSpanAttributes(span, {
-          "nuq.job_failed": success,
-        });
-
-        return success;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        _logger.info("nuqJobFail metrics", {
-          module: "nuq/metrics",
-          method: "nuqJobFail",
-          duration,
-          scrapeId: id,
-        });
       }
-    });
+
+      return success;
+    } finally {
+      const duration = Date.now() - start;
+      _logger.info("nuqJobFail metrics", {
+        module: "nuq/metrics",
+        method: "nuqJobFail",
+        duration,
+        scrapeId: id,
+      });
+    }
   }
 
   // === Metrics
@@ -1539,123 +1415,79 @@ class NuQJobGroup {
     ttl?: number,
     _logger: Logger = logger,
   ): Promise<NuQJobGroupInstance> {
-    return withSpan("nuq.addGroup", async span => {
-      setSpanAttributes(span, {
-        "nuq.group_name": this.groupName,
-        "nuq.group_id": id,
-        "nuq.ttl": ttl ?? 86400000,
+    const start = Date.now();
+    try {
+      const result = this.rowToGroup(
+        (
+          await nuqPool.query(
+            `INSERT INTO ${this.groupName} (id, owner_id, ttl) VALUES ($1, $2, $3) RETURNING ${this.groupReturning.join(", ")};`,
+            [id, normalizeOwnerId(ownerId), ttl ?? 86400000],
+          )
+        ).rows[0],
+      )!;
+
+      return result;
+    } finally {
+      const duration = Date.now() - start;
+      _logger.info("nuqAddGroup metrics", {
+        module: "nuq/metrics",
+        method: "nuqAddGroup",
+        duration,
+        groupId: id,
       });
-
-      const start = Date.now();
-      try {
-        const result = this.rowToGroup(
-          (
-            await nuqPool.query(
-              `INSERT INTO ${this.groupName} (id, owner_id, ttl) VALUES ($1, $2, $3) RETURNING ${this.groupReturning.join(", ")};`,
-              [id, normalizeOwnerId(ownerId), ttl ?? 86400000],
-            )
-          ).rows[0],
-        )!;
-
-        setSpanAttributes(span, {
-          "nuq.group_created": true,
-        });
-
-        return result;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        _logger.info("nuqAddGroup metrics", {
-          module: "nuq/metrics",
-          method: "nuqAddGroup",
-          duration,
-          groupId: id,
-        });
-      }
-    });
+    }
   }
 
   public async getGroup(
     id: string,
     _logger: Logger = logger,
   ): Promise<NuQJobGroupInstance | null> {
-    return withSpan("nuq.getGroup", async span => {
-      setSpanAttributes(span, {
-        "nuq.group_name": this.groupName,
-        "nuq.group_id": id,
+    const start = Date.now();
+    try {
+      const result = this.rowToGroup(
+        (
+          await nuqPool.query(
+            `SELECT ${this.groupReturning.join(", ")} FROM ${this.groupName} WHERE ${this.groupName}.id = $1;`,
+            [id],
+          )
+        ).rows[0],
+      );
+
+      return result;
+    } finally {
+      const duration = Date.now() - start;
+      _logger.info("nuqGetGroup metrics", {
+        module: "nuq/metrics",
+        method: "nuqGetGroup",
+        duration,
+        groupId: id,
       });
-
-      const start = Date.now();
-      try {
-        const result = this.rowToGroup(
-          (
-            await nuqPool.query(
-              `SELECT ${this.groupReturning.join(", ")} FROM ${this.groupName} WHERE ${this.groupName}.id = $1;`,
-              [id],
-            )
-          ).rows[0],
-        );
-
-        setSpanAttributes(span, {
-          "nuq.group_found": result !== null,
-          "nuq.group_status": result?.status,
-        });
-
-        return result;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        _logger.info("nuqGetGroup metrics", {
-          module: "nuq/metrics",
-          method: "nuqGetGroup",
-          duration,
-          groupId: id,
-        });
-      }
-    });
+    }
   }
 
   public async getOngoingByOwner(
     ownerId: string,
     _logger: Logger = logger,
   ): Promise<NuQJobGroupInstance[]> {
-    return withSpan("nuq.getGroupByOwner", async span => {
-      setSpanAttributes(span, {
-        "nuq.group_name": this.groupName,
-        "nuq.owner_id": ownerId,
+    const start = Date.now();
+    try {
+      const result = (
+        await nuqPool.query(
+          `SELECT ${this.groupReturning.join(", ")} FROM ${this.groupName} WHERE ${this.groupName}.owner_id = $1 AND ${this.groupName}.status = 'active'`,
+          [normalizeOwnerId(ownerId)],
+        )
+      ).rows.map(x => this.rowToGroup(x)!);
+
+      return result;
+    } finally {
+      const duration = Date.now() - start;
+      _logger.info("nuqGetGroup metrics", {
+        module: "nuq/metrics",
+        method: "nuqGetGroupByOwner",
+        duration,
+        ownerId: ownerId,
       });
-
-      const start = Date.now();
-      try {
-        const result = (
-          await nuqPool.query(
-            `SELECT ${this.groupReturning.join(", ")} FROM ${this.groupName} WHERE ${this.groupName}.owner_id = $1 AND ${this.groupName}.status = 'active'`,
-            [normalizeOwnerId(ownerId)],
-          )
-        ).rows.map(x => this.rowToGroup(x)!);
-
-        setSpanAttributes(span, {
-          "nuq.groups_found": result.length,
-        });
-
-        return result;
-      } finally {
-        const duration = Date.now() - start;
-        setSpanAttributes(span, {
-          "nuq.duration_ms": duration,
-        });
-        _logger.info("nuqGetGroup metrics", {
-          module: "nuq/metrics",
-          method: "nuqGetGroupByOwner",
-          duration,
-          ownerId: ownerId,
-        });
-      }
-    });
+    }
   }
 }
 

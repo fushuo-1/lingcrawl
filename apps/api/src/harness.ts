@@ -2,7 +2,7 @@ import { config } from "./config";
 import { type ChildProcess, spawn } from "child_process";
 import * as net from "net";
 import { basename, join } from "path";
-import { HTML_TO_MARKDOWN_PATH } from "./natives";
+import { HTML_TO_MARKDOWN_PATH } from "./lib/html-to-markdown";
 
 const childProcesses = new Set<ChildProcess>();
 const stopping = new WeakSet<ChildProcess>(); // processes we're intentionally stopping
@@ -36,7 +36,6 @@ interface Services {
   nuqPrefetchWorker?: ProcessResult;
   nuqReconcilerWorker?: ProcessResult;
   extractWorker?: ProcessResult;
-  indexWorker?: ProcessResult;
   command?: ProcessResult;
   nuqPostgres?: {
     containerName: string;
@@ -793,19 +792,6 @@ async function startServices(command?: string[]): Promise<Services> {
     },
   );
 
-  const indexWorker = config.USE_DB_AUTHENTICATION
-    ? execForward(
-        "index-worker",
-        process.argv[2] === "--start-docker"
-          ? "node dist/src/services/indexing/index-worker.js"
-          : "pnpm index-worker:production",
-        {
-          NUQ_REDUCE_NOISE: "true",
-          NUQ_POD_NAME: "index-worker",
-        },
-      )
-    : undefined;
-
   // tests hammer the API instantly, so we need to ensure it's running before launching tests
   if (
     command &&
@@ -828,7 +814,6 @@ async function startServices(command?: string[]): Promise<Services> {
     nuqWorkers,
     nuqPrefetchWorker,
     nuqReconcilerWorker,
-    indexWorker,
     extractWorker,
     command: commandProcess,
     nuqPostgres,
@@ -845,7 +830,6 @@ async function stopDevelopmentServices(services: Services) {
     ...services.nuqWorkers.map(w => w.process),
     services.nuqPrefetchWorker?.process,
     services.nuqReconcilerWorker?.process,
-    services.indexWorker?.process,
     services.extractWorker?.process,
     services.command?.process,
   ].filter((p): p is ChildProcess => !!p);
@@ -1004,7 +988,6 @@ async function waitForTermination(services: Services): Promise<void> {
   if (services.command) promises.push(services.command.promise);
   if (services.api) promises.push(services.api.promise);
   if (services.worker) promises.push(services.worker.promise);
-  if (services.indexWorker) promises.push(services.indexWorker.promise);
   if (services.extractWorker) promises.push(services.extractWorker.promise);
   if (services.nuqPrefetchWorker)
     promises.push(services.nuqPrefetchWorker.promise);

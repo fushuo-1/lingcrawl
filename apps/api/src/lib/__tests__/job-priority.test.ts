@@ -6,7 +6,7 @@ import {
 import { redisEvictConnection } from "../../services/redis";
 import {} from "../../types";
 
-jest.mock("../../services/queue-service", () => ({
+jest.mock("../../services/redis", () => ({
   redisConnection: {
     sadd: jest.fn(),
     srem: jest.fn(),
