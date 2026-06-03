@@ -1,4 +1,10 @@
 import "dotenv/config";
+import { configDotenv } from "dotenv";
+import path from "path";
+
+// Fallback: load .env from repo root when running from apps/api/
+configDotenv({ path: path.resolve(__dirname, "..", "..", "..", ".env"), override: false });
+
 import { z } from "zod";
 
 /* Codecs */
