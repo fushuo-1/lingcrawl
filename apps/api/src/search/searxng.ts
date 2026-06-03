@@ -2,6 +2,11 @@ import axios from "axios";
 import { config } from "../config";
 import { SearchV2Response, WebSearchResult } from "../lib/entities";
 import { logger } from "../lib/logger";
+import {
+  processQuery,
+  diversifyByDomain,
+  type TimeRange,
+} from "./query-processor";
 
 interface SearchOptions {
   tbs?: string;
@@ -21,22 +26,38 @@ export async function searxng_search(
   const requestedResults = Math.max(options.num_results, 0);
   const startPage = options.page ?? 1;
 
+  // ─── Query preprocessing ───
+  const processed = processQuery(q);
+
   const url = config.SEARXNG_ENDPOINT!;
   const cleanedUrl = url.endsWith("/") ? url.slice(0, -1) : url;
   const finalUrl = cleanedUrl + "/search";
 
+  // Use caller-provided lang if set, otherwise use detected language
+  const effectiveLang = options.lang && options.lang !== "en"
+    ? options.lang
+    : processed.lang;
+
+  // Use caller-provided engines if SEARXNG_ENGINES is explicitly set,
+  // otherwise use intelligent routing
+  const effectiveEngines = config.SEARXNG_ENGINES
+    ? config.SEARXNG_ENGINES
+    : processed.engines;
+
   const fetchPage = async (page: number): Promise<WebSearchResult[]> => {
-    const params = {
-      q: q,
-      language: options.lang,
-      // gl: options.country, //not possible with SearXNG
-      // location: options.location, //not possible with SearXNG
-      // num: options.num_results, //not possible with SearXNG
-      engines: config.SEARXNG_ENGINES ?? "",
+    const params: Record<string, string | number | undefined> = {
+      q: processed.query,
+      language: effectiveLang,
+      engines: effectiveEngines,
       categories: config.SEARXNG_CATEGORIES ?? "",
       pageno: page,
       format: "json",
     };
+
+    // Pass time_range for timely queries
+    if (processed.timeRange) {
+      params.time_range = processed.timeRange;
+    }
 
     const response = await axios.get(finalUrl, {
       headers: {
@@ -48,11 +69,14 @@ export async function searxng_search(
     const data = response.data;
 
     if (data && Array.isArray(data.results)) {
-      return data.results.map((a: any) => ({
-        url: a.url,
-        title: a.title,
-        description: a.content,
-      }));
+      return data.results
+        .filter((a: any) => a.score > 0)
+        .sort((a: any, b: any) => b.score - a.score)
+        .map((a: any) => ({
+          url: a.url,
+          title: a.title,
+          description: a.content,
+        }));
     }
 
     return [];
@@ -79,6 +103,9 @@ export async function searxng_search(
         break;
       }
     }
+
+    // Deduplicate by domain for diversity
+    webResults = diversifyByDomain(webResults, 3);
 
     return webResults.length > 0
       ? {

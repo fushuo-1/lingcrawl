@@ -4,7 +4,7 @@ search:
   formats:
     - html
     - json
-  default_lang: "auto"
+  default_lang: ""
   autocomplete: ""
 
 server:
@@ -16,39 +16,31 @@ outgoing:
   max_request_timeout: 15
 
 engines:
-  # ===== 国内通用搜索（高权重） =====
+  # ===== 国内通用搜索 =====
   - name: baidu
     disabled: false
-    weight: 2.0
   - name: sogou
     disabled: false
-    weight: 1.5
   - name: 360search
     disabled: false
-    weight: 1.5
   - name: quark
     disabled: false
-    weight: 1.2
 
-  # ===== 国际通用搜索（中权重，补充英文覆盖） =====
+  # ===== 国际通用搜索 =====
   - name: bing
     disabled: false
-    weight: 1.2
   - name: google
     disabled: false
-    weight: 1.0
   - name: duckduckgo
     disabled: false
-    weight: 0.8
   - name: brave
     disabled: false
-    weight: 0.8
 
   # ===== 国内垂直搜索 =====
   - name: baidu images
-    disabled: false
+    disabled: true
   - name: sogou images
-    disabled: false
+    disabled: true
   - name: sogou wechat
     disabled: false
   - name: bilibili
@@ -58,10 +50,10 @@ engines:
 
   # ===== 国际垂直搜索 =====
   - name: bing news
-    disabled: false
+    disabled: true
   - name: bing images
-    disabled: false
+    disabled: true
   - name: google news
-    disabled: false
+    disabled: true
   - name: google scholar
-    disabled: false
+    disabled: true
