@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import { chromium, Browser, BrowserContext, Route, Request as PlaywrightRequest, Page } from 'playwright';
 import dotenv from 'dotenv';
-import UserAgent from 'user-agents';
 import { getError } from './helpers/get_error';
 import { lookup } from 'dns/promises';
 import IPAddr from 'ipaddr.js';
@@ -155,6 +154,42 @@ class Semaphore {
 }
 const pageSemaphore = new Semaphore(MAX_CONCURRENT_PAGES);
 
+// --- Stealth: anti-detection scripts injected before every page ---
+const STEALTH_INIT_SCRIPT = `
+  // Hide webdriver flag
+  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+  // Fake chrome runtime
+  if (!window.chrome) {
+    window.chrome = { runtime: {}, loadTimes: () => ({}), csi: () => ({}) };
+  }
+
+  // Fix permissions.query to not reveal automation
+  const origQuery = window.navigator.permissions?.query?.bind(window.navigator.permissions);
+  if (origQuery) {
+    window.navigator.permissions.query = (params) => {
+      if (params.name === 'notifications') {
+        return Promise.resolve({ state: Notification.permission });
+      }
+      return origQuery(params);
+    };
+  }
+
+  // Ensure plugins array looks populated (headless has 0 plugins)
+  Object.defineProperty(navigator, 'plugins', {
+    get: () => [1, 2, 3, 4, 5],
+  });
+
+  // Ensure languages look real
+  Object.defineProperty(navigator, 'languages', {
+    get: () => ['zh-CN', 'zh', 'en-US', 'en'],
+  });
+`;
+
+// Real Chrome UA (stable channel, kept up-to-date)
+const CHROME_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36";
+
 const AD_SERVING_DOMAINS = [
   'doubleclick.net',
   'adservice.google.com',
@@ -198,17 +233,16 @@ const initializeBrowser = async () => {
 };
 
 const createContext = async (skipTlsVerification: boolean = false): Promise<{ context: BrowserContext; securityState: ContextSecurityState }> => {
-  const userAgent = new UserAgent().toString();
   const viewport = { width: 1280, height: 800 };
   const securityState: ContextSecurityState = {
     blockedNavigationRequestUrl: null,
   };
 
   const contextOptions: any = {
-    userAgent,
+    userAgent: CHROME_USER_AGENT,
     viewport,
     ignoreHTTPSErrors: skipTlsVerification,
-    serviceWorkers: 'block',
+    locale: 'zh-CN',
   };
 
   if (PROXY_SERVER && PROXY_USERNAME && PROXY_PASSWORD) {
@@ -224,6 +258,9 @@ const createContext = async (skipTlsVerification: boolean = false): Promise<{ co
   }
 
   const newContext = await browser.newContext(contextOptions);
+
+  // Inject stealth scripts to bypass basic browser detection
+  await newContext.addInitScript(STEALTH_INIT_SCRIPT);
 
   if (BLOCK_MEDIA) {
     await newContext.route('**/*.{png,jpg,jpeg,gif,svg,mp3,mp4,avi,flac,ogg,wav,webm}', async (route: Route, request: PlaywrightRequest) => {
@@ -310,13 +347,59 @@ const scrapePage = async (
     }
   }
 
-  let headers = null, content = await page.content();
+  // Detect PDF.js viewer and extract text from rendered pages
+  const isPdfJs = await page.evaluate(() =>
+    !!document.querySelector('.pdfViewer') || !!document.querySelector('#viewer.pdfViewer')
+  );
+
+  let headers = null, content: string;
   let ct: string | undefined = undefined;
-  if (response) {
-    headers = await response.allHeaders();
-    ct = Object.entries(headers).find(([key]) => key.toLowerCase() === "content-type")?.[1];
-    if (ct && (ct.toLowerCase().includes("application/json") || ct.toLowerCase().includes("text/plain"))) {
-      content = (await response.body()).toString("utf8"); // TODO: determine real encoding
+
+  if (isPdfJs) {
+    // Wait for PDF.js text layers to render (up to 20s)
+    try {
+      await page.waitForFunction(() => {
+        const textLayers = document.querySelectorAll('.textLayer');
+        return textLayers.length > 0 &&
+          Array.from(textLayers).some(tl => tl.textContent && tl.textContent.trim().length > 0);
+      }, { timeout: 20000 });
+    } catch {
+      // Text layer never appeared — PDF may be image-based or still loading
+    }
+
+    // Extract text from each page's text layer
+    content = await page.evaluate(() => {
+      const pages = document.querySelectorAll('.page');
+      if (pages.length === 0) {
+        // Fallback: try to get any visible text
+        return document.body.innerText || '';
+      }
+      const texts: string[] = [];
+      pages.forEach((pageEl, i) => {
+        const textLayer = pageEl.querySelector('.textLayer');
+        if (textLayer && textLayer.textContent?.trim()) {
+          texts.push(textLayer.textContent.trim());
+        }
+      });
+      return texts.join('\n\n');
+    });
+
+    // If text layer extraction yielded nothing, fall back to innerText
+    if (!content || content.trim().length === 0) {
+      content = await page.evaluate(() => document.body.innerText || '');
+    }
+
+    // Wrap extracted text as simple HTML for downstream consumers
+    content = `<html><body><pre>${content}</pre></body></html>`;
+    ct = 'text/html';
+  } else {
+    content = await page.content();
+    if (response) {
+      headers = await response.allHeaders();
+      ct = Object.entries(headers).find(([key]) => key.toLowerCase() === "content-type")?.[1];
+      if (ct && (ct.toLowerCase().includes("application/json") || ct.toLowerCase().includes("text/plain"))) {
+        content = (await response.body()).toString("utf8"); // TODO: determine real encoding
+      }
     }
   }
 
