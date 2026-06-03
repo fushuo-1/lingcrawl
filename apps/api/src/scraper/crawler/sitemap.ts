@@ -14,11 +14,6 @@ import { promisify } from "node:util";
 import { SitemapError } from "../../lib/error";
 import { useIndex } from "../../services";
 
-// Stub for removed CostTracking
-class CostTracking {
-  toJSON() { return {}; }
-}
-
 const useFireEngine =
   config.FIRE_ENGINE_BETA_URL !== "" &&
   config.FIRE_ENGINE_BETA_URL !== undefined;
@@ -95,7 +90,6 @@ async function getSitemapXML(options: SitemapScrapeOptions): Promise<string> {
       crawlId: options.crawlId,
       isPreCrawl: options.isPreCrawl,
     },
-    new CostTracking(),
   );
 
   if (

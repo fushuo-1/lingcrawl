@@ -8,6 +8,7 @@ const DEFAULT_TEAM_ID = "local";
 export type BuildSyncScrapeJobOptions = {
   url: string;
   scrapeOptions: BaseScrapeOptions;
+  jobId?: string;
   origin?: string;
   integration?: string | null;
   startTime?: number;
@@ -26,7 +27,7 @@ export type BuildSyncScrapeJobOptions = {
 export function buildSyncScrapeJob(
   opts: BuildSyncScrapeJobOptions,
 ): NuQJob<ScrapeJobData> {
-  const jobId = uuidv7();
+  const jobId = opts.jobId ?? uuidv7();
   const teamId = DEFAULT_TEAM_ID;
   const zeroDataRetention = opts.zeroDataRetention ?? false;
 

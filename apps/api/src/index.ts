@@ -5,10 +5,7 @@ import * as Sentry from "@sentry/node";
 import express, { NextFunction, Request, Response } from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import {
-  getBillingQueue,
-  getPrecrawlQueue,
-} from "./services/queue-service";
+import { getPrecrawlQueue } from "./services/queue-service";
 import { apiRouter } from "./routes/api";
 import { adminRouter } from "./routes/admin";
 import os from "os";
@@ -73,7 +70,6 @@ serverAdapter.setBasePath(`/admin/${config.BULL_AUTH_KEY}/queues`);
 
 const { addQueue, removeQueue, setQueues, replaceQueues } = createBullBoard({
   queues: [
-    new BullMQAdapter(getBillingQueue()),
     new BullMQAdapter(getPrecrawlQueue()),
   ],
   serverAdapter: serverAdapter,

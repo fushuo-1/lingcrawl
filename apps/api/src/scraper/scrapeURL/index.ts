@@ -24,10 +24,6 @@ import { parseMarkdown } from "../../lib/html-to-markdown";
 import { hasFormatOfType } from "../../lib/format-utils";
 import { captureExceptionWithZdrCheck } from "../../services/sentry";
 
-// Stub for removed CostTracking
-class CostTracking {
-  toJSON() { return {}; }
-}
 import {
   ActionError,
   AddFeatureError,
@@ -49,11 +45,11 @@ import {
   DocumentPrefetchFailed,
   FEPageLoadFailed,
   EngineSnipedError,
-  WaterfallNextEngineSignal,
   EngineUnsuccessfulError,
   ProxySelectionError,
   ScrapeRetryLimitError,
   BrandingNotSupportedError,
+  WaterfallNextEngineSignal,
 } from "./error";
 import { ScrapeRetryTracker } from "./retryTracker";
 import { executeTransformers } from "./transformers";
@@ -123,7 +119,6 @@ export type Meta = {
       }
     | null
     | undefined; // undefined: no prefetch yet, null: prefetch came back empty
-  costTracking: CostTracking;
   winnerEngine?: Engine;
   abortHandle?: NodeJS.Timeout;
 };
@@ -219,7 +214,6 @@ async function buildMetaObject(
   url: string,
   options: ScrapeOptions,
   internalOptions: InternalOptions,
-  costTracking: CostTracking,
 ): Promise<Meta> {
   const specParams =
     urlSpecificParams[new URL(url).hostname.replace(/^www\./, "")];
@@ -295,7 +289,6 @@ async function buildMetaObject(
         : null,
     pdfPrefetch: undefined,
     documentPrefetch: undefined,
-    costTracking,
   };
 }
 
@@ -857,7 +850,6 @@ export async function scrapeURL(
   url: string,
   options: ScrapeOptions,
   internalOptions: InternalOptions,
-  costTracking: CostTracking,
 ): Promise<ScrapeUrlResponse> {
   return withSpan("scrape.pipeline", async span => {
     const meta = await buildMetaObject(
@@ -865,7 +857,6 @@ export async function scrapeURL(
       url,
       options,
       internalOptions,
-      costTracking,
     );
 
     const startTime = Date.now();
@@ -1118,9 +1109,6 @@ export async function scrapeURL(
 
       return result;
     } catch (error) {
-      // if (Object.values(meta.results).length > 0 && Object.values(meta.results).every(x => x.state === "error" && x.error instanceof FEPageLoadFailed)) {
-      //   throw new FEPageLoadFailed();
-      // } else
       meta.logger.debug("scrapeURL metrics", {
         module: "scrapeURL/metrics",
         timeTaken: Date.now() - startTime,

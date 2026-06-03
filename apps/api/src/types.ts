@@ -12,15 +12,10 @@ import { ExtractorOptions, Document } from "./lib/entities";
 import { InternalOptions } from "./scraper/scrapeURL";
 import { SerializedTraceContext } from "./lib/otel-tracer";
 
-// Stubs for removed billing/cost tracking types
-type BillingMetadata = any;
-type CostTracking = any;
-
 type ScrapeJobCommon = {
   concurrencyLimited?: boolean;
   team_id: string;
   zeroDataRetention: boolean;
-  billing?: BillingMetadata;
   traceContext?: SerializedTraceContext;
   skipNuq?: boolean;
   requestId?: string;
@@ -102,7 +97,6 @@ export interface RunWebScraperParams {
   priority?: number;
   is_crawl?: boolean;
   urlInvisibleInCurrentCrawl?: boolean;
-  costTracking: CostTracking;
 }
 
 export interface LingCrawlScrapeResponse {

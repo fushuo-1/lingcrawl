@@ -5,15 +5,10 @@ import { scrapeURL, ScrapeUrlResponse } from "../scraper/scrapeURL";
 import type { NuQJob } from "../services/worker/nuq";
 configDotenv();
 
-// Stub for removed CostTracking
-type CostTracking = any;
-
 export async function startWebScraperPipeline({
   job,
-  costTracking,
 }: {
   job: NuQJob<ScrapeJobSingleUrls>;
-  costTracking: CostTracking;
 }) {
   return await runWebScraper({
     url: job.data.url,
@@ -38,7 +33,6 @@ export async function startWebScraperPipeline({
     is_crawl: !!(job.data.crawl_id && job.data.crawlerOptions !== null),
     urlInvisibleInCurrentCrawl:
       job.data.crawlerOptions?.urlInvisibleInCurrentCrawl ?? false,
-    costTracking,
   });
 }
 
@@ -51,7 +45,6 @@ async function runWebScraper({
   priority,
   is_crawl = false,
   urlInvisibleInCurrentCrawl = false,
-  costTracking,
 }: RunWebScraperParams): Promise<ScrapeUrlResponse> {
   const logger = _logger.child({
     method: "runWebScraper",
@@ -92,7 +85,6 @@ async function runWebScraper({
           urlInvisibleInCurrentCrawl,
           teamId: internalOptions?.teamId ?? team_id,
         },
-        costTracking,
       );
       if (!response.success) {
         if (response.error instanceof Error) {
@@ -121,36 +113,6 @@ async function runWebScraper({
       error = _error;
     }
   }
-
-  // const engineOrder = Object.entries(engines)
-  //   .sort((a, b) => a[1].startedAt - b[1].startedAt)
-  //   .map((x) => x[0]) as Engine[];
-
-  // for (const engine of engineOrder) {
-  //   const result = engines[engine] as Exclude<
-  //     EngineResultsTracker[Engine],
-  //     undefined
-  //   >;
-  //   ScrapeEvents.insert(bull_job_id, {
-  //     type: "scrape",
-  //     url,
-  //     method: engine,
-  //     result: {
-  //       success: result.state === "success",
-  //       response_code:
-  //         result.state === "success" ? result.result.statusCode : undefined,
-  //       response_size:
-  //         result.state === "success" ? result.result.html.length : undefined,
-  //       error:
-  //         result.state === "error"
-  //           ? result.error
-  //           : result.state === "timeout"
-  //             ? "Timed out"
-  //             : undefined,
-  //       time_taken: result.finishedAt - result.startedAt,
-  //     },
-  //   });
-  // }
 
   if (error === undefined && response?.success) {
     return response;

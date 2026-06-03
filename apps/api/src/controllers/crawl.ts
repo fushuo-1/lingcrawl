@@ -124,7 +124,6 @@ export const crawlController = withErrorHandler(async (
       internalOptions: sc.internalOptions,
       origin: req.body.origin,
       integration: req.body.integration,
-      billing: { endpoint: "crawl", jobId: id },
       crawl_id: id,
       webhook: req.body.webhook,
       v1: true,

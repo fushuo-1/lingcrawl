@@ -13,11 +13,6 @@ import {
   processSitemap,
   SitemapProcessingResult,
 } from "@lingcrawl/lingcrawl-rs";
-
-// Stub for removed CostTracking
-class CostTracking {
-  toJSON() { return {}; }
-}
 import { gunzip } from "node:zlib";
 import { promisify } from "node:util";
 import { fetchFileToBuffer } from "../scrapeURL/engines/utils/downloadFile";
@@ -130,7 +125,6 @@ export async function getLinksFromSitemap(
             teamId: "sitemap",
             zeroDataRetention,
           },
-          new CostTracking(),
         );
 
         if (

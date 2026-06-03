@@ -112,4 +112,14 @@ describe("buildSyncScrapeJob", () => {
       "https://example.com/path?q=1",
     );
   });
+
+  it("uses the provided jobId instead of generating one", () => {
+    const job = buildSyncScrapeJob({
+      url: "https://example.com",
+      scrapeOptions: minimalScrapeOptions,
+      jobId: "custom-job-id-1234",
+    });
+
+    expect(job.id).toBe("custom-job-id-1234");
+  });
 });

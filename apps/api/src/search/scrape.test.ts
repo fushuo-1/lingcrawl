@@ -18,7 +18,7 @@ jest.mock("../services/worker/scrape-worker", () => ({
 }));
 
 describe("scrapeSearchResults", () => {
-  it("preserves billing metadata on spawned scrape jobs", async () => {
+  it("spawns scrape jobs with correct options", async () => {
     await scrapeSearchResults(
       [
         {
@@ -34,7 +34,7 @@ describe("scrapeSearchResults", () => {
         scrapeOptions: {} as any,
         apiKeyId: 123,
         requestId: "req-1",
-        billing: { endpoint: "agent" },
+        bypassBilling: true,
       },
       { debug: jest.fn(), info: jest.fn(), error: jest.fn() } as any,
       null as any,
@@ -47,7 +47,7 @@ describe("scrapeSearchResults", () => {
     expect(processJobInternal).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          billing: { endpoint: "agent" },
+          url: "https://example.com",
         }),
       }),
     );

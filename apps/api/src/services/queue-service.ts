@@ -3,7 +3,6 @@ import { config } from "../config";
 import { logger } from "../lib/logger";
 import IORedis from "ioredis";
 
-let billingQueue: Queue;
 let precrawlQueue: Queue;
 let redisConnection: IORedis;
 
@@ -19,25 +18,7 @@ export function getRedisConnection(): IORedis {
   return redisConnection;
 }
 
-const billingQueueName = "{billingQueue}";
 export const precrawlQueueName = "{precrawlQueue}";
-
-export function getBillingQueue() {
-  if (!billingQueue) {
-    billingQueue = new Queue(billingQueueName, {
-      connection: getRedisConnection(),
-      defaultJobOptions: {
-        removeOnComplete: {
-          age: 60,
-        },
-        removeOnFail: {
-          age: 3600,
-        },
-      },
-    });
-  }
-  return billingQueue;
-}
 
 export function getPrecrawlQueue() {
   if (!precrawlQueue) {

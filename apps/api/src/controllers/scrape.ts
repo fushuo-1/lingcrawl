@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { config } from "../config";
 import { logger as _logger } from "../lib/logger";
 import {
   Document,
@@ -12,10 +11,9 @@ import { v7 as uuidv7 } from "uuid";
 import { hasFormatOfType } from "../lib/format-utils";
 import { TransportableError } from "../lib/error";
 import { withErrorHandler } from "./error-wrapper";
-import { NuQJob } from "../services/worker/nuq";
+import { buildSyncScrapeJob } from "../services/job-factory";
 import { withSpan, setSpanAttributes, SpanKind } from "../lib/otel-tracer";
 import { processJobInternal } from "../services/worker/scrape-worker";
-import { ScrapeJobData } from "../types";
 import { teamConcurrencySemaphore } from "../services/worker/team-semaphore";
 import { logRequest } from "../services/logging/log_job";
 
@@ -139,35 +137,17 @@ export const scrapeController = withErrorHandler(async (
                   "wait.job_id": jobId,
                 });
 
-                const job: NuQJob<ScrapeJobData> = {
-                  id: jobId,
-                  status: "active",
-                  createdAt: new Date(),
-                  priority: 10,
-                  data: {
-                    url: req.body.url,
-                    mode: "single_urls",
-                    team_id: teamId,
-                    scrapeOptions: {
-                      ...req.body,
-                    },
-                    internalOptions: {
-                      teamId,
-                      saveScrapeResultToGCS: false,
-                      unnormalizedSourceURL: preNormalizedBody.url,
-                      bypassBilling: true,
-                      zeroDataRetention,
-                      teamFlags: null,
-                    },
-                    skipNuq: true,
-                    origin,
-                    integration: req.body.integration,
-                    startTime: controllerStartTime,
-                    zeroDataRetention,
-                    apiKeyId: null,
-                    concurrencyLimited: limited,
-                  },
-                };
+                const job = buildSyncScrapeJob({
+                  jobId,
+                  url: req.body.url,
+                  scrapeOptions: { ...req.body },
+                  origin,
+                  integration: req.body.integration,
+                  startTime: controllerStartTime,
+                  zeroDataRetention,
+                  concurrencyLimited: limited,
+                  unnormalizedSourceURL: preNormalizedBody.url,
+                });
 
                 const result = await processJobInternal(job);
 

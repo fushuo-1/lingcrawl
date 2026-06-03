@@ -176,7 +176,6 @@ export const batchScrapeController = withErrorHandler(async (
       scrapeOptions,
       origin: "api",
       integration: req.body.integration,
-      billing: { endpoint: "batch_scrape" as const, jobId: id },
       crawl_id: id,
       bypassBilling: true,
       sitemapped: true,
