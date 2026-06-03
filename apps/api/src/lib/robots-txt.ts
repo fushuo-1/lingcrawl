@@ -56,7 +56,6 @@ export async function fetchRobotsTxt(
       teamId: "robots-txt",
       zeroDataRetention,
     },
-    null as any,
   );
 
   if (

@@ -39,7 +39,9 @@ import { startWebScraperPipeline } from "../../main/runWebScraper";
 import { normalizeUrlOnlyHostname } from "../../lib/canonical-url";
 import { isUrlBlocked } from "../../scraper/WebScraper/utils/blocklist";
 import { UNSUPPORTED_SITE_MESSAGE } from "../../lib/strings";
-import { generateURLSplits, queryIndexAtSplitLevel } from "../index";
+// generateURLSplits, queryIndexAtSplitLevel removed with index service
+const generateURLSplits = (url: string): string[] => [url];
+const queryIndexAtSplitLevel = async (..._args: any[]): Promise<string[]> => [];
 import { WebCrawler } from "../../scraper/WebScraper/crawler";
 import type { Logger } from "winston";
 import {

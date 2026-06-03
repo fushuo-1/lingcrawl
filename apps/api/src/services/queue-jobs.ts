@@ -8,7 +8,6 @@ export class QueueFullError extends Error {
     this.name = "QueueFullError";
   }
 }
-import { logger as _logger } from "../lib/logger";
 import { sendNotificationWithCustomDays } from "./notification/email_notification";
 import { shouldSendConcurrencyLimitNotification } from "./notification/notification-check";
 import { getACUCTeam } from "../controllers/auth";

@@ -74,6 +74,7 @@ const configSchema = z.object({
   FORCED_ENGINE_DOMAINS: z.string().optional(),
   USE_GO_MARKDOWN_PARSER: z.stringbool().optional(),
   PLAYWRIGHT_MICROSERVICE_URL: z.string().optional(),
+  BLOCK_MEDIA: z.stringbool().optional(),
 
   // System
   MAX_CPU: z.coerce.number().default(0.8),

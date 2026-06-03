@@ -16,7 +16,7 @@ import {
 import { fireEngineMap } from "../search/fireEngine";
 import { redisEvictConnection } from "../services/redis";
 // generateURLSplits, queryIndexAtDomainSplitLevelWithMeta, queryIndexAtSplitLevelWithMeta removed with index service
-const generateURLSplits = (urls: string[]) => urls;
+const generateURLSplits = (url: string): string[] => [url];
 const queryIndexAtDomainSplitLevelWithMeta = async (..._args: any[]) => [];
 const queryIndexAtSplitLevelWithMeta = async (..._args: any[]) => [];
 import { performCosineSimilarityV2 } from "./map-cosine";

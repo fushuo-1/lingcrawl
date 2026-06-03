@@ -1,6 +1,11 @@
 import { Logger } from "winston";
 import { config } from "../../config";
 
+// Side-effect imports: register engine handlers at module load time
+import "./engines/fetch";
+import "./engines/playwright";
+import "./engines/pdf";
+
 import {
   type Document,
   getPDFMaxPages,

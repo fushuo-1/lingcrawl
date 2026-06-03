@@ -1261,7 +1261,7 @@ export type TeamFlags = {
   bypassCreditChecks?: boolean;
 } | null;
 
-interface RequestWithMaybeACUC<
+export interface RequestWithMaybeACUC<
   ReqParams = {},
   ReqBody = undefined,
   ResBody = undefined,
@@ -1594,14 +1594,6 @@ export type Action = z.infer<typeof actionSchema>;
 export type InternalAction = Action & {
   metadata?: { [key: string]: unknown };
 };
-
-export interface RequestWithMaybeACUC<
-  ReqParams = {},
-  ReqBody = undefined,
-  ResBody = undefined,
-> extends Request<ReqParams, ReqBody, ResBody> {
-  acuc?: any;
-}
 
 export interface RequestWithMaybeAuth<
   ReqParams = {},
