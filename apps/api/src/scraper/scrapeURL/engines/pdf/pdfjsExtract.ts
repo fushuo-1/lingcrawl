@@ -1,4 +1,6 @@
 import { deflateSync } from "node:zlib";
+import { resolve, dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 import type {
   PDFProcessorResult,
   ExtractedTable,
@@ -16,9 +18,12 @@ let pdfjsLib: any = null;
 
 async function getPdfjs() {
   if (!pdfjsLib) {
-    // Use legacy build for Node.js compatibility (no web worker required)
     pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+    // In Node.js, pdfjs-dist requires an explicit worker path
+    const pdfjsPkgPath = require.resolve("pdfjs-dist/package.json");
+    const pdfjsDir = dirname(pdfjsPkgPath);
+    const workerPath = resolve(pdfjsDir, "legacy/build/pdf.worker.mjs");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
   }
   return pdfjsLib;
 }
