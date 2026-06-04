@@ -27,6 +27,7 @@ export async function scrapeURLWithPlaywright(
       pageStatusCode: z.number(),
       pageError: z.string().optional(),
       contentType: z.string().optional(),
+      embeddedPdfUrl: z.string().optional(),
     }),
     mock: meta.mock,
     abort: meta.abort.asSignal(),
@@ -42,6 +43,7 @@ export async function scrapeURLWithPlaywright(
     statusCode: response.pageStatusCode,
     error: response.pageError,
     contentType: response.contentType,
+    embeddedPdfUrl: response.embeddedPdfUrl,
 
     proxyUsed: "basic",
   };

@@ -403,11 +403,35 @@ const scrapePage = async (
     }
   }
 
+  // Detect embedded PDF iframes and extract the URL for downstream PDF parsing
+  let embeddedPdfUrl: string | undefined;
+  try {
+    embeddedPdfUrl = await page.evaluate(() => {
+      const iframe = document.querySelector('iframe[src*=".pdf"]') as HTMLIFrameElement | null;
+      if (iframe?.src) {
+        // Strip hash params like #page=1&view=fitH
+        return iframe.src.split('#')[0];
+      }
+      // Also check <embed> and <object> tags
+      const embed = document.querySelector('embed[src*=".pdf"]') as HTMLEmbedElement | null;
+      if (embed?.src) return embed.src.split('#')[0];
+      const obj = document.querySelector('object[data*=".pdf"]') as HTMLObjectElement | null;
+      if (obj?.data) return obj.data.split('#')[0];
+      return undefined;
+    });
+    if (embeddedPdfUrl) {
+      console.log(`📎 Detected embedded PDF: ${embeddedPdfUrl}`);
+    }
+  } catch {
+    // Ignore errors in PDF detection
+  }
+
   return {
     content,
     status: response ? response.status() : null,
     headers,
     contentType: ct,
+    embeddedPdfUrl,
   };
 };
 
@@ -514,6 +538,7 @@ app.post('/scrape', async (req: Request, res: Response) => {
       content: result.content,
       pageStatusCode: result.status,
       contentType: result.contentType,
+      ...(result.embeddedPdfUrl && { embeddedPdfUrl: result.embeddedPdfUrl }),
       ...(pageError && { pageError })
     });
 

@@ -713,6 +713,40 @@ async function scrapeURLLoop(meta: Meta): Promise<ScrapeUrlResponse> {
     meta.winnerEngine = result.engine;
     let engineResult: EngineScrapeResult = result.result;
 
+    // Auto-extract embedded PDFs detected by playwright (e.g. LCSC datasheets)
+    if (engineResult.embeddedPdfUrl) {
+      meta.logger.info("Embedded PDF detected, fetching with PDF engine", {
+        pdfUrl: engineResult.embeddedPdfUrl,
+      });
+      try {
+        const pdfResult = await scrapeURL(
+          meta.id,
+          engineResult.embeddedPdfUrl,
+          {
+            ...meta.options,
+            formats: meta.options.formats?.map(f =>
+              f.type === "markdown" ? f : { type: "markdown" as const },
+            ),
+          },
+          {
+            ...meta.internalOptions,
+            forceEngine: "pdf",
+          },
+        );
+        if (pdfResult.success) {
+          return pdfResult;
+        }
+        meta.logger.warn("PDF engine failed for embedded PDF, falling back to HTML result", {
+          pdfUrl: engineResult.embeddedPdfUrl,
+        });
+      } catch (err) {
+        meta.logger.warn("Error fetching embedded PDF, falling back to HTML result", {
+          pdfUrl: engineResult.embeddedPdfUrl,
+          error: err,
+        });
+      }
+    }
+
     for (const postprocessor of postprocessors) {
       if (
         postprocessor.shouldRun(

@@ -92,6 +92,8 @@ export type EngineScrapeResult = {
   youtubeTranscriptContent?: any;
   postprocessorsUsed?: string[];
 
+  embeddedPdfUrl?: string;
+
   proxyUsed: "basic" | "stealth";
   timezone?: string;
 };
