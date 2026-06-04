@@ -1,9 +1,11 @@
 declare module "pdfjs-dist" {
-  export const GlobalWorkerOptions: { workerSrc: string };
+  export const GlobalWorkerOptions: { workerSrc: string; standardFontDataUrl?: string };
   export function getDocument(params: {
     url: string;
     isEvalSupported?: boolean;
     useSystemFonts?: boolean;
+    disableFontFace?: boolean;
+    verbosity?: number;
   }): { promise: Promise<PDFDocumentProxy> };
 
   export interface PDFDocumentProxy {
@@ -40,4 +42,8 @@ declare module "pdfjs-dist" {
     fnArray: number[];
     argsArray: any[][];
   }
+}
+
+declare module "pdfjs-dist/legacy/build/pdf.mjs" {
+  export * from "pdfjs-dist";
 }

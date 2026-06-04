@@ -12,12 +12,12 @@ import type {
  *
  * Loaded lazily to avoid startup cost when not needed.
  */
-let pdfjsLib: typeof import("pdfjs-dist") | null = null;
+let pdfjsLib: any = null;
 
 async function getPdfjs() {
   if (!pdfjsLib) {
-    pdfjsLib = await import("pdfjs-dist");
-    // Disable worker to avoid issues in Node.js
+    // Use legacy build for Node.js compatibility (no web worker required)
+    pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
     pdfjsLib.GlobalWorkerOptions.workerSrc = "";
   }
   return pdfjsLib;
@@ -382,6 +382,8 @@ export async function extractWithPdfjs(
       : filePath,
     isEvalSupported: false,
     useSystemFonts: true,
+    disableFontFace: true,
+    verbosity: 0,
   });
 
   const doc = await loadingTask.promise;

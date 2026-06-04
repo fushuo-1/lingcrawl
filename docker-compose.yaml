@@ -91,13 +91,6 @@ services:
     command: node dist/src/harness.js --start-docker
     ports:
       - "${PORT:-3002}:${INTERNAL_PORT:-3002}"
-    volumes:
-      - ./docker-dist/config.js:/app/dist/src/config.js:ro
-      - ./docker-dist/search/index.js:/app/dist/src/search/index.js:ro
-      - ./docker-dist/search/v2/index.js:/app/dist/src/search/v2/index.js:ro
-      - ./docker-dist/routes-v1.js:/app/dist/src/routes/v1.js:ro
-      - ./docker-dist/routes-v2.js:/app/dist/src/routes/v2.js:ro
-      - ./docker-dist/routes-admin.js:/app/dist/src/routes/admin.js:ro
     cpus: 4.0
     mem_limit: 8G
     memswap_limit: 8G
