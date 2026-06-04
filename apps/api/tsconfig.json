@@ -13,6 +13,7 @@
     "moduleResolution": "NodeNext",
     "strictNullChecks": true,
     "isolatedModules": true,
+    "skipLibCheck": true,
 
     "inlineSources": true,
 
