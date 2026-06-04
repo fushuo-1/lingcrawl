@@ -169,7 +169,9 @@ function buildFeatureFlags(
     flags.add("stealthProxy");
   }
 
-  const urlO = new URL(url);
+  const urlO = new URL(
+    url.startsWith("/") || url.match(/^[A-Z]:\\/i) ? `file://${url}` : url,
+  );
   const lowerPath = urlO.pathname.toLowerCase();
 
   // Check for document types first (they take precedence over PDF)
@@ -808,6 +810,9 @@ async function scrapeURLLoop(meta: Meta): Promise<ScrapeUrlResponse> {
           : {}),
         postprocessorsUsed: engineResult.postprocessorsUsed,
       },
+      ...(engineResult.pdfTables ? { pdfTables: engineResult.pdfTables } : {}),
+      ...(engineResult.pdfImages ? { pdfImages: engineResult.pdfImages } : {}),
+      ...(engineResult.pdfEnhancedMetadata ? { pdfMetadata: engineResult.pdfEnhancedMetadata } : {}),
     };
 
     if (result.unsupportedFeatures.size > 0) {

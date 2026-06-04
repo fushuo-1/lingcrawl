@@ -404,6 +404,9 @@ const pdfParserWithOptions = z.strictObject({
   type: z.literal("pdf"),
   mode: pdfModeSchema.optional(),
   maxPages: z.int().positive().finite().max(10000).optional(),
+  pages: z.string().optional(), // page range, e.g. "1-5,10" or "3,7,12-20"
+  includeTables: z.boolean().optional(),
+  includeImages: z.boolean().optional(),
 });
 
 const parsersSchema = z
@@ -446,6 +449,40 @@ export function getPDFMode(parsers?: Parsers): PDFMode {
     }
   }
   return "auto";
+}
+
+export function getPDFPages(parsers?: Parsers): string | undefined {
+  if (!parsers) return undefined;
+  for (const parser of parsers) {
+    if (typeof parser === "object" && parser !== null && "pages" in parser) {
+      return (parser as any).pages;
+    }
+  }
+  return undefined;
+}
+
+export function getPDFIncludeTables(parsers?: Parsers): boolean {
+  if (!parsers) return false;
+  for (const parser of parsers) {
+    if (typeof parser === "object" && parser !== null && "includeTables" in parser) {
+      return (parser as any).includeTables === true;
+    }
+  }
+  return false;
+}
+
+export function getPDFIncludeImages(parsers?: Parsers): boolean {
+  if (!parsers) return false;
+  for (const parser of parsers) {
+    if (typeof parser === "object" && parser !== null && "includeImages" in parser) {
+      return (parser as any).includeImages === true;
+    }
+  }
+  return false;
+}
+
+export function needsPdfjsEngine(parsers?: Parsers): boolean {
+  return !!(getPDFPages(parsers) || getPDFIncludeTables(parsers) || getPDFIncludeImages(parsers));
 }
 
 function transformIframeSelector(selector: string): string {
@@ -1063,6 +1100,34 @@ export type Document = {
     title: string;
     description: string;
     url: string;
+  };
+  pdfTables?: {
+    page: number;
+    tableIndex: number;
+    rows: string[][];
+    rowCount: number;
+    colCount: number;
+    confidence: number;
+  }[];
+  pdfImages?: {
+    page: number;
+    index: number;
+    width: number;
+    height: number;
+    format: string;
+    data: string;
+  }[];
+  pdfMetadata?: {
+    title?: string;
+    author?: string;
+    subject?: string;
+    keywords?: string;
+    creator?: string;
+    producer?: string;
+    creationDate?: string;
+    modDate?: string;
+    pageCount: number;
+    pdfVersion?: string;
   };
 };
 

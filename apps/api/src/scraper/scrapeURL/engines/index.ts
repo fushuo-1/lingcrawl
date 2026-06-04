@@ -2,7 +2,7 @@ import { ScrapeActionContent } from "../../../lib/entities";
 import { Meta } from "..";
 import { hasFormatOfType } from "../../../lib/format-utils";
 import { getPDFMaxPages } from "../../../controllers/types";
-import type { PdfMetadata } from "./pdf/types";
+import type { PdfMetadata, ExtractedTable, ExtractedImage, EnhancedPdfMetadata } from "./pdf/types";
 
 export type Engine =
   | "playwright"
@@ -82,6 +82,10 @@ export type EngineScrapeResult = {
   };
 
   pdfMetadata?: PdfMetadata;
+
+  pdfTables?: ExtractedTable[];
+  pdfImages?: ExtractedImage[];
+  pdfEnhancedMetadata?: EnhancedPdfMetadata;
 
   cacheInfo?: {
     created_at: Date;

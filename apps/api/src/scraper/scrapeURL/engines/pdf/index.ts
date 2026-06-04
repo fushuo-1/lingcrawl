@@ -9,12 +9,17 @@ import {
   PDFPrefetchFailed,
   EngineUnsuccessfulError,
 } from "../../error";
-import { open, readFile, unlink } from "node:fs/promises";
+import { open, readFile, unlink, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import type { Response } from "undici";
 import {
   shouldParsePDF,
   getPDFMaxPages,
   getPDFMode,
+  getPDFPages,
+  getPDFIncludeTables,
+  getPDFIncludeImages,
+  needsPdfjsEngine,
 } from "../../../../controllers/types";
 import type { PDFMode } from "../../../../controllers/types";
 import { processPdf } from "@lingcrawl/lingcrawl-rs";
@@ -23,6 +28,7 @@ import type { PDFProcessorResult } from "./types";
 import { emitNativeLogs, extractAndEmitNativeLogs } from "../../../../lib/native-logging";
 import { scrapePDFWithParsePDF } from "./pdfParse";
 import { isPdfBuffer, PDF_SNIFF_WINDOW } from "./pdfUtils";
+import { extractWithPdfjs } from "./pdfjsExtract";
 
 /** Check if the PDF is eligible for Rust extraction, returning a rejection reason or null. */
 function getIneligibleReason(
@@ -40,6 +46,117 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
   const shouldParse = shouldParsePDF(meta.options.parsers);
   const maxPages = getPDFMaxPages(meta.options.parsers);
   const mode: PDFMode = getPDFMode(meta.options.parsers);
+  const pagesSpec = getPDFPages(meta.options.parsers);
+  const includeTables = getPDFIncludeTables(meta.options.parsers);
+  const includeImages = getPDFIncludeImages(meta.options.parsers);
+  const usePdfjs = needsPdfjsEngine(meta.options.parsers);
+
+  const targetUrl = meta.rewrittenUrl ?? meta.url;
+  const isLocalFile = targetUrl.startsWith("file://") || existsSync(targetUrl);
+
+  // --- pdfjs engine path: per-page, tables, images ---
+  if (usePdfjs && shouldParse) {
+    const filePath = isLocalFile
+      ? targetUrl.replace(/^file:\/\//, "")
+      : targetUrl;
+
+    // For remote URLs, download first
+    let localPath = filePath;
+    let tempFile: string | null = null;
+
+    if (!isLocalFile) {
+      const { response, tempFilePath } = await downloadFile(
+        meta.id,
+        targetUrl,
+        meta.options.skipTlsVerification,
+        {
+          headers: meta.options.headers,
+          signal: meta.abort.asSignal(),
+        },
+      );
+      localPath = tempFilePath;
+      tempFile = tempFilePath;
+    }
+
+    try {
+      const result = await extractWithPdfjs(localPath, {
+        pages: pagesSpec,
+        maxPages,
+        includeTables,
+        includeImages,
+      });
+
+      return {
+        url: targetUrl,
+        statusCode: 200,
+        html: result.html,
+        markdown: result.markdown,
+        pdfMetadata: {
+          numPages: result.enhancedMetadata?.pageCount ?? 0,
+          title: result.enhancedMetadata?.title,
+        },
+        pdfTables: result.tables,
+        pdfImages: result.images,
+        pdfEnhancedMetadata: result.enhancedMetadata,
+        proxyUsed: "basic",
+      };
+    } finally {
+      if (tempFile) {
+        try { await unlink(tempFile); } catch {}
+      }
+    }
+  }
+
+  // --- Local file path (basic extraction, no advanced options) ---
+  if (isLocalFile && shouldParse) {
+    const filePath = targetUrl.replace(/^file:\/\//, "");
+    const buffer = await readFile(filePath);
+
+    if (!isPdfBuffer(buffer.subarray(0, PDF_SNIFF_WINDOW))) {
+      throw new EngineUnsuccessfulError("pdf");
+    }
+
+    // Write to temp file for Rust/pdfParse processing
+    const tmpPath = `${filePath}.tmp.${meta.id}`;
+    await writeFile(tmpPath, buffer);
+
+    try {
+      let result: PDFProcessorResult | null = null;
+
+      // Try Rust extraction first
+      try {
+        const nativeCtx = { scrapeId: meta.id, url: targetUrl };
+        const pdfResult = processPdf(tmpPath, maxPages ?? undefined, nativeCtx);
+        emitNativeLogs(pdfResult.logs, meta.logger, "pdf.process");
+
+        if (pdfResult.pdfType === "TextBased" && pdfResult.confidence >= 0.95 && !pdfResult.isComplex && pdfResult.markdown) {
+          const html = await marked.parse(pdfResult.markdown, { async: true });
+          result = { markdown: pdfResult.markdown, html };
+        }
+      } catch (err) {
+        extractAndEmitNativeLogs(err, meta.logger, "pdf.process");
+      }
+
+      // Fallback to pdfParse
+      if (!result) {
+        result = await scrapePDFWithParsePDF(
+          { ...meta, logger: meta.logger.child({ method: "scrapePDF/localPdfParse" }) },
+          tmpPath,
+        );
+      }
+
+      return {
+        url: targetUrl,
+        statusCode: 200,
+        html: result?.html ?? "",
+        markdown: result?.markdown,
+        pdfMetadata: { numPages: 0 },
+        proxyUsed: "basic",
+      };
+    } finally {
+      try { await unlink(tmpPath); } catch {}
+    }
+  }
 
   if (!shouldParse) {
     if (meta.pdfPrefetch !== undefined && meta.pdfPrefetch !== null) {
