@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Response } from "../lib/express-types";
 import { logger as _logger } from "../lib/logger";
 import {
   Document,
@@ -15,7 +15,7 @@ import { processJobInternal } from "../services/worker/scrape-worker";
 import { teamConcurrencySemaphore } from "../services/worker/team-semaphore";
 import { logRequest } from "../services/logging/log_job";
 
-import { Request } from "express";
+import { Request } from "../lib/express-types";
 
 export const scrapeController = withErrorHandler(async (
   req: Request<{}, ScrapeResponse, ScrapeRequest>,

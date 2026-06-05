@@ -2,7 +2,7 @@ import "dotenv/config";
 import { config } from "../config";
 import { logger as _logger } from "../lib/logger";
 import { configDotenv } from "dotenv";
-import Express from "express";
+import http from "node:http";
 import { initializeBlocklist } from "../scraper/WebScraper/utils/blocklist";
 import { initializeEngineForcing } from "../scraper/WebScraper/utils/engine-forcing";
 import { crawlFinishedQueue, NuQJob, scrapeQueue } from "./worker/nuq";
@@ -143,18 +143,22 @@ const crawlFinishWorker = async () => {
 };
 
 // Start all workers
-const app = Express();
-
 let currentLiveness: boolean = true;
 
-app.get("/liveness", (req, res) => {
-  _logger.info("Liveness endpoint hit");
-  currentLiveness = true;
-  res.status(200).json({ ok: true });
+const server = http.createServer(async (req, res) => {
+  if (req.url === "/liveness") {
+    _logger.info("Liveness endpoint hit");
+    currentLiveness = true;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
 });
 
 const workerPort = config.WORKER_PORT || config.PORT;
-app.listen(workerPort, () => {
+server.listen(workerPort, () => {
   _logger.info(`Liveness endpoint is running on port ${workerPort}`);
 });
 

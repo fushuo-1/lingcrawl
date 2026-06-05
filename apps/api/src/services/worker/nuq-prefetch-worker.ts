@@ -7,24 +7,29 @@ import {
   nuqShutdown,
   crawlFinishedQueue,
 } from "./nuq";
-import Express from "express";
+import http from "node:http";
 import { logger } from "../../lib/logger";
 
 (async () => {
-  const app = Express();
-
-  app.get("/metrics", (_, res) =>
-    res.contentType("text/plain").send(nuqGetLocalMetrics()),
-  );
-  app.get("/health", async (_, res) => {
-    if (await nuqHealthCheck()) {
-      res.status(200).send("OK");
+  const server = http.createServer(async (req, res) => {
+    if (req.url === "/metrics") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end(nuqGetLocalMetrics());
+    } else if (req.url === "/health") {
+      if (await nuqHealthCheck()) {
+        res.writeHead(200);
+        res.end("OK");
+      } else {
+        res.writeHead(500);
+        res.end("Not OK");
+      }
     } else {
-      res.status(500).send("Not OK");
+      res.writeHead(404);
+      res.end();
     }
   });
 
-  const server = app.listen(config.NUQ_PREFETCH_WORKER_PORT, () => {
+  server.listen(config.NUQ_PREFETCH_WORKER_PORT, () => {
     logger.info("NuQ prefetch worker metrics server started");
   });
 

@@ -1,113 +1,101 @@
-import { NextFunction, Request, Response } from "express";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { createIdempotencyKey } from "../services/idempotency/create";
 import { validateIdempotencyKey } from "../services/idempotency/validate";
 import { isUrlBlocked } from "../scraper/WebScraper/utils/blocklist";
 import { logger } from "../lib/logger";
-import {
-  httpRequestDurationSeconds,
-  getRoutePattern,
-} from "../lib/http-metrics";
+import { httpRequestDurationSeconds } from "../lib/http-metrics";
 import { UNSUPPORTED_SITE_MESSAGE } from "../lib/strings";
 import { validate as isUuid } from "uuid";
 
-export function idempotencyMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
+export async function idempotencyHook(
+  request: FastifyRequest,
+  reply: FastifyReply,
 ) {
-  (async () => {
-    if (req.headers["x-idempotency-key"]) {
-      const isIdempotencyValid = await validateIdempotencyKey(req);
-      if (!isIdempotencyValid) {
-        if (!res.headersSent) {
-          return res
-            .status(409)
-            .json({ success: false, error: "Idempotency key already used" });
-        }
-      }
-      createIdempotencyKey(req);
-    }
-    next();
-  })().catch(err => next(err));
-}
-
-export function blocklistMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  if (typeof req.body?.url === "string" && isUrlBlocked(req.body.url, null)) {
-    if (!res.headersSent) {
-      return res.status(403).json({
+  if (request.headers["x-idempotency-key"]) {
+    const isIdempotencyValid = await validateIdempotencyKey(
+      request.headers as Record<string, string | string[] | undefined>,
+    );
+    if (!isIdempotencyValid) {
+      return reply.code(409).send({
         success: false,
-        error: UNSUPPORTED_SITE_MESSAGE,
+        error: "Idempotency key already used",
       });
     }
+    createIdempotencyKey(
+      request.headers as Record<string, string | string[] | undefined>,
+    );
   }
-  next();
+}
+
+export async function blocklistHook(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const body = request.body as { url?: unknown } | undefined;
+  if (typeof body?.url === "string" && isUrlBlocked(body.url, null as any)) {
+    return reply.code(403).send({
+      success: false,
+      error: UNSUPPORTED_SITE_MESSAGE,
+    });
+  }
 }
 
 export function isValidJobId(jobId: string | undefined): jobId is string {
   return typeof jobId === "string" && isUuid(jobId);
 }
 
-export function validateJobIdParam(
-  req: Request<{ jobId?: string }>,
-  res: Response,
-  next: NextFunction,
+export async function validateJobIdHook(
+  request: FastifyRequest,
+  reply: FastifyReply,
 ) {
-  if (!isValidJobId(req.params.jobId)) {
-    return res.status(400).json({
+  const params = request.params as { jobId?: string };
+  if (!isValidJobId(params.jobId)) {
+    return reply.code(400).send({
       success: false,
       error: "Invalid job ID format. Job ID must be a valid UUID.",
     });
   }
-  next();
 }
 
-export function requestTimingMiddleware(version: string) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const startTime = new Date().getTime();
+const UUID_REGEX =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
-    (req as any).requestTiming = {
-      startTime,
-      version,
-    };
-
-    const originalJson = res.json.bind(res);
-    res.json = function (body: any) {
-      const requestTime = new Date().getTime() - startTime;
-
-      const durationSeconds = requestTime / 1000;
-      const route = getRoutePattern(req);
-      const status = String(res.statusCode);
-
-      httpRequestDurationSeconds
-        .labels(version, req.method, route, status)
-        .observe(durationSeconds);
-
-      if (body?.success !== false) {
-        logger.info(`${version} request completed`, {
-          version,
-          path: req.path,
-          method: req.method,
-          startTime,
-          requestTime,
-          statusCode: res.statusCode,
-        });
-      }
-
-      return originalJson(body);
-    };
-
-    next();
-  };
+export function getRoutePattern(request: FastifyRequest): string {
+  const routeOptions = (request as any).routeOptions;
+  if (routeOptions?.url) {
+    return routeOptions.url;
+  }
+  return request.url.replace(UUID_REGEX, ":id");
 }
 
-export function wrap(
-  controller: (req: Request, res: Response) => Promise<any>,
-): (req: Request, res: Response, next: NextFunction) => any {
-  return (req, res, next) => {
-    controller(req, res).catch(err => next(err));
-  };
+export async function registerTimingHooks(fastify: FastifyInstance) {
+  fastify.addHook("onRequest", async (request) => {
+    (request as any).requestTiming = {
+      startTime: Date.now(),
+      version: "api",
+    };
+  });
+
+  fastify.addHook("onResponse", async (request, reply) => {
+    const timing = (request as any).requestTiming;
+    if (!timing) return;
+    const duration = (Date.now() - timing.startTime) / 1000;
+    const route = getRoutePattern(request);
+    const status = String(reply.statusCode);
+
+    httpRequestDurationSeconds
+      .labels(timing.version, request.method, route, status)
+      .observe(duration);
+
+    if (reply.statusCode < 400) {
+      logger.info(`${timing.version} request completed`, {
+        version: timing.version,
+        path: request.url,
+        method: request.method,
+        startTime: timing.startTime,
+        requestTime: Date.now() - timing.startTime,
+        statusCode: reply.statusCode,
+      });
+    }
+  });
 }

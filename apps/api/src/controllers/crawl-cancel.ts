@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Response } from "../lib/express-types";
 import { logger } from "../lib/logger";
 import { getCrawl, saveCrawl } from "../lib/crawl-redis";
 import { configDotenv } from "dotenv";

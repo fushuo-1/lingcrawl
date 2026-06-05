@@ -2,7 +2,7 @@ import "dotenv/config";
 import { config } from "../../config";
 import { logger as _logger } from "../../lib/logger";
 import { Counter, register } from "prom-client";
-import Express from "express";
+import http from "node:http";
 
 const RECONCILER_INTERVAL_MS = 60 * 1000;
 
@@ -25,21 +25,26 @@ const reconcilerJobsRecoveredTotal = new Counter({
   let isShuttingDown = false;
   let reconcilerInFlight = false;
 
-  const app = Express();
-
-  app.get("/metrics", async (_, res) => {
-    try {
-      res.contentType("text/plain").send(await register.metrics());
-    } catch (error) {
-      _logger.error("Failed to collect metrics", { error });
-      res.status(500).send("Failed to collect metrics");
+  const server = http.createServer(async (req, res) => {
+    if (req.url === "/metrics") {
+      try {
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end(await register.metrics());
+      } catch (error) {
+        _logger.error("Failed to collect metrics", { error });
+        res.writeHead(500);
+        res.end("Failed to collect metrics");
+      }
+    } else if (req.url === "/health") {
+      res.writeHead(200);
+      res.end("OK");
+    } else {
+      res.writeHead(404);
+      res.end();
     }
   });
-  app.get("/health", (_, res) => {
-    res.status(200).send("OK");
-  });
 
-  const server = app.listen(config.NUQ_RECONCILER_WORKER_PORT, () => {
+  server.listen(config.NUQ_RECONCILER_WORKER_PORT, () => {
     _logger.info("NuQ reconciler worker started", {
       port: config.NUQ_RECONCILER_WORKER_PORT,
     });

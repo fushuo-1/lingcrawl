@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "../lib/express-types";
 import { z } from "zod";
 import { protocolIncluded, checkUrl } from "../lib/validateUrl";
 import { countries } from "../lib/validate-country";

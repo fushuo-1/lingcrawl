@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Response } from "../lib/express-types";
 import {
   mapRequestSchema,
   MapRequest,

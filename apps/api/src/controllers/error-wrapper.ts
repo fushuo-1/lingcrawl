@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response } from "../lib/express-types";
 import { ZodError } from "zod";
 import {
   ErrorCodes,
