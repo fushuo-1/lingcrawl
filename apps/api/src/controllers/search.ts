@@ -8,7 +8,6 @@ import {
 import { v7 as uuidv7 } from "uuid";
 import { logSearch, logRequest } from "../services/logging/log_job";
 import { logger as _logger } from "../lib/logger";
-import { CategoryOption } from "../lib/search-query-builder";
 import { executeSearch } from "../search/execute";
 import { withErrorHandler } from "./error-wrapper";
 
@@ -63,7 +62,7 @@ export const searchController = withErrorHandler(async (
       country: req.body.country,
       location: req.body.location,
       sources: req.body.sources as Array<{ type: string }>,
-      categories: req.body.categories as CategoryOption[],
+      categories: req.body.categories as string[],
       enterprise: req.body.enterprise,
       scrapeOptions: req.body.scrapeOptions,
       timeout: req.body.timeout,

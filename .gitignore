@@ -36,9 +36,11 @@ test-results/
 _local/
 .claude/
 CLAUDE.md
+CONTEXT.md
 CLAUDE.local.md
 docker-dist/
 docs/
+.pdf
 
 # Go module cache
 /apps/go-html-to-md-service/.gomodcache/

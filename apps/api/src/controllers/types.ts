@@ -33,8 +33,10 @@ export const URL = z.preprocess(
   },
   z
     .url()
-    .regex(/^https?:\/\//i, "URL uses unsupported protocol")
+    .regex(/^(https?|file):\/\//i, "URL uses unsupported protocol")
     .refine(x => {
+      // file:// URLs don't need TLD validation
+      if (x.startsWith("file://")) return true;
       return /(\.[a-zA-Z0-9-\u0400-\u04FF\u0500-\u052F\u2DE0-\u2DFF\uA640-\uA69F]{2,}|\.xn--[a-zA-Z0-9-]{1,})(:\d+)?([\/?#]|$)/i.test(
         x,
       );
@@ -950,12 +952,6 @@ export const crawlRequestSchema = strictWithMessage(crawlRequestSchemaBase)
 //   crawlerOptions?: CrawlerOptions;
 //   scrapeOptions?: Exclude<ScrapeRequest, "url">;
 // };
-
-// export type ExtractorOptions = {
-//   mode: "markdown" | "llm-extraction" | "llm-extraction-from-markdown" | "llm-extraction-from-raw-html";
-//   extractionPrompt?: string;
-//   extractionSchema?: Record<string, any>;
-// }
 
 export type CrawlRequest = z.infer<typeof crawlRequestSchema>;
 export type CrawlRequestInput = z.input<typeof crawlRequestSchema>;

@@ -17,7 +17,6 @@ import {
   saveCrawl,
   StoredCrawl,
 } from "../lib/crawl-redis";
-import { getJobPriority } from "../lib/job-priority";
 import { addScrapeJobs } from "../services/queue-jobs";
 import { logger as _logger } from "../lib/logger";
 import { UNSUPPORTED_SITE_MESSAGE } from "../lib/strings";
@@ -150,10 +149,7 @@ export const batchScrapeController = withErrorHandler(async (
   let jobPriority = 20;
 
   if (urls.length > 1000) {
-    jobPriority = await getJobPriority({
-      team_id: "local",
-      basePriority: 21,
-    });
+    jobPriority = 21;
   }
   logger.debug("Using job priority " + jobPriority, { jobPriority });
 

@@ -7,7 +7,7 @@ import {
 } from "./controllers/types";
 // AuthCreditUsageChunk stub
 type AuthCreditUsageChunk = any;
-import { ExtractorOptions, Document } from "./lib/entities";
+import { Document } from "./lib/entities";
 import { InternalOptions } from "./scraper/scrapeURL";
 
 type ScrapeJobCommon = {

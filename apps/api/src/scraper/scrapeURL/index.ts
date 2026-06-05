@@ -212,8 +212,9 @@ async function buildMetaObject(
   options: ScrapeOptions,
   internalOptions: InternalOptions,
 ): Promise<Meta> {
-  const specParams =
-    urlSpecificParams[new URL(url).hostname.replace(/^www\./, "")];
+  const urlO = new URL(url);
+  const hostname = urlO.protocol === "file:" ? "" : urlO.hostname.replace(/^www\./, "");
+  const specParams = hostname ? urlSpecificParams[hostname] : undefined;
   if (specParams !== undefined) {
     options = Object.assign(options, specParams.scrapeOptions);
     internalOptions = Object.assign(

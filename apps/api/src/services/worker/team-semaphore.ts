@@ -1,4 +1,3 @@
-import { isSelfHosted } from "../../lib/deployment";
 import { ScrapeJobTimeoutError, TransportableError } from "../../lib/error";
 import { logger as _logger } from "../../lib/logger";
 import { nuqRedis, semaphoreKeys } from "./redis";
@@ -170,36 +169,7 @@ async function withSemaphore<T>(
   timeoutMs: number,
   func: (limited: boolean) => Promise<T>,
 ): Promise<T> {
-  // Bypass concurrency limits for self-hosted deployments
-  if (isSelfHosted()) {
-    _logger.debug(`Bypassing concurrency limit for ${teamId}`, {
-      teamId,
-      jobId: holderId,
-    });
-    return await func(false);
-  }
-
-  const { limited } = await acquireBlocking(teamId, holderId, limit, {
-    base_delay_ms: 25,
-    max_delay_ms: 250,
-    timeout_ms: timeoutMs,
-    signal,
-  });
-
-  const endTimer = semaphoreHoldDuration.startTimer();
-  const hb = startHeartbeat(teamId, holderId, SEMAPHORE_TTL / 2);
-
-  activeSemaphores.inc();
-  try {
-    const result = await Promise.race([func(limited), hb.promise]);
-    return result;
-  } finally {
-    activeSemaphores.dec();
-    hb.stop();
-    endTimer();
-
-    await release(teamId, holderId).catch(() => {});
-  }
+  return await func(false);
 }
 
 const getMetrics = async () => {

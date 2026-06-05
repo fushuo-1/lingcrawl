@@ -1,7 +1,6 @@
 import { ErrorCodes, TransportableError } from "../../lib/error";
 import { Meta } from ".";
 import { Engine, FeatureFlag } from "./engines";
-import { isSelfHosted } from "../../lib/deployment";
 
 export class EngineError extends Error {
   constructor(message?: string, options?: ErrorOptions) {
@@ -14,9 +13,7 @@ export class NoEnginesLeftError extends TransportableError {
 
   constructor(fallbackList: Engine[]) {
     const enginesTriedStr = fallbackList.join(", ");
-    const message = isSelfHosted()
-      ? `All scraping engines failed to retrieve content from this URL. Engines tried: [${enginesTriedStr}]. This usually happens when: (1) The URL is invalid or the page doesn't exist (404), (2) The website is blocking automated access, (3) The website is down or unreachable, (4) The page requires authentication. Double check the URL is correct and accessible in a browser. Check your server logs for more detailed error information from each engine.`
-      : `All scraping engines failed to retrieve content from this URL. Engines tried: [${enginesTriedStr}]. This usually happens when: (1) The URL is invalid or the page doesn't exist (404), (2) The website is blocking automated access, (3) The website is down or unreachable, (4) The page requires authentication. Double check the URL is correct and accessible in a browser. If the issue persists, contact us at help@lingcrawl.com with your request ID for investigation.`;
+    const message = `All scraping engines failed to retrieve content from this URL. Engines tried: [${enginesTriedStr}]. This usually happens when: (1) The URL is invalid or the page doesn't exist (404), (2) The website is blocking automated access, (3) The website is down or unreachable, (4) The page requires authentication. Double check the URL is correct and accessible in a browser. Check your server logs for more detailed error information from each engine.`;
 
     super("SCRAPE_ALL_ENGINES_FAILED", message);
     this.fallbackList = fallbackList;
@@ -381,9 +378,7 @@ export class PDFOCRRequiredError extends TransportableError {
 
 export class PDFPrefetchFailed extends TransportableError {
   constructor() {
-    const message = isSelfHosted()
-      ? "Failed to prefetch the PDF file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the PDF is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. Check your server logs for more details about the specific protection mechanism encountered."
-      : "Failed to prefetch the PDF file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the PDF is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. If this is a business-critical URL, please contact help@lingcrawl.com with the URL and we can investigate adding specific support for this site.";
+    const message = "Failed to prefetch the PDF file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the PDF is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. Check your server logs for more details about the specific protection mechanism encountered.";
 
     super("SCRAPE_PDF_PREFETCH_FAILED", message);
   }
@@ -426,9 +421,7 @@ export class DocumentAntibotError extends TransportableError {
 
 export class DocumentPrefetchFailed extends TransportableError {
   constructor() {
-    const message = isSelfHosted()
-      ? "Failed to prefetch the document file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the document (DOCX, XLSX, etc.) is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. Check your server logs for more details about the specific protection mechanism encountered."
-      : "Failed to prefetch the document file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the document (DOCX, XLSX, etc.) is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. If this is a business-critical URL, please contact help@lingcrawl.com with the URL and we can investigate adding specific support for this site.";
+    const message = "Failed to prefetch the document file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the document (DOCX, XLSX, etc.) is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. Check your server logs for more details about the specific protection mechanism encountered.";
 
     super("SCRAPE_DOCUMENT_PREFETCH_FAILED", message);
   }

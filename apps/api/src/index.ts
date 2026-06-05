@@ -5,7 +5,7 @@ import bodyParser from "body-parser";
 import cors from "cors";
 
 import { apiRouter } from "./routes/api";
-import { adminRouter } from "./routes/admin";
+import { mcpRouter } from "./mcp/transport.js";
 import os from "os";
 import { logger } from "./lib/logger";
 import http from "node:http";
@@ -20,7 +20,6 @@ import { QueueFullError } from "./services/queue-jobs";
 import { v7 as uuidv7 } from "uuid";
 import { cacheableLookup } from "./scraper/scrapeURL/lib/cacheableLookup";
 import { nuqShutdown } from "./services/worker/nuq";
-import { getErrorContactMessage } from "./lib/deployment";
 import { initializeBlocklist } from "./scraper/WebScraper/utils/blocklist";
 import { initializeEngineForcing } from "./scraper/WebScraper/utils/engine-forcing";
 import responseTime from "response-time";
@@ -69,7 +68,9 @@ app.get("/health/readiness", (_, res) => res.status(200).json({ status: "ok" }))
 
 // register router
 app.use("/api", apiRouter);
-app.use(adminRouter);
+
+// MCP endpoint — Streamable HTTP transport
+app.all("/mcp", mcpRouter);
 
 const DEFAULT_PORT = config.PORT;
 const HOST = config.HOST;
@@ -212,7 +213,7 @@ app.use(
     res.status(500).json({
       success: false,
       code: "UNKNOWN_ERROR",
-      error: getErrorContactMessage(id),
+      error: `An error occurred. Please check your logs for more details. Error ID: ${id}`,
     });
   },
 );

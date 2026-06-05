@@ -1,11 +1,6 @@
 import type { Logger } from "winston";
 import { search } from "./index";
 import { SearchV2Response } from "../lib/entities";
-import {
-  buildSearchQuery,
-  getCategoryFromUrl,
-  CategoryOption,
-} from "../lib/search-query-builder";
 import { ScrapeOptions, TeamFlags } from "../controllers/types";
 import {
   getItemsToScrape,
@@ -23,7 +18,7 @@ interface SearchOptions {
   country?: string;
   location?: string;
   sources: Array<{ type: string }>;
-  categories?: CategoryOption[];
+  categories?: string[];
   enterprise?: ("default" | "anon" | "zdr")[];
   scrapeOptions?: ScrapeOptions;
   timeout: number;
@@ -69,10 +64,7 @@ export async function executeSearch(
   logger.info("Searching for results");
 
   const searchTypes = [...new Set(sources.map((s: any) => s.type))];
-  const { query: searchQuery, categoryMap } = buildSearchQuery(
-    query,
-    categories,
-  );
+  const searchQuery = query;
 
   const searchResponse = (await search({
     query: searchQuery,
@@ -87,22 +79,6 @@ export async function executeSearch(
     type: searchTypes,
     enterprise: options.enterprise,
   })) as SearchV2Response;
-
-  if (searchResponse.web && searchResponse.web.length > 0) {
-    searchResponse.web = searchResponse.web.map(result => ({
-      ...result,
-      category: getCategoryFromUrl(result.url, categoryMap),
-    }));
-  }
-
-  if (searchResponse.news && searchResponse.news.length > 0) {
-    searchResponse.news = searchResponse.news.map(result => ({
-      ...result,
-      category: result.url
-        ? getCategoryFromUrl(result.url, categoryMap)
-        : undefined,
-    }));
-  }
 
   let totalResultsCount = 0;
 

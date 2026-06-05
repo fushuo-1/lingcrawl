@@ -31,6 +31,11 @@ export const checkAndUpdateURL = (url: string) => {
 
   const typedUrlObj = urlObj as URL;
 
+  // file:// URLs are allowed for local file access (e.g. local PDFs)
+  if (typedUrlObj.protocol === "file:") {
+    return { urlObj: typedUrlObj, url: url };
+  }
+
   if (typedUrlObj.protocol !== "http:" && typedUrlObj.protocol !== "https:") {
     throw new Error("Invalid URL");
   }
@@ -45,6 +50,11 @@ export const checkUrl = (url: string) => {
   }
 
   const typedUrlObj = urlObj as URL;
+
+  // file:// URLs are allowed for local file access (e.g. local PDFs)
+  if (typedUrlObj.protocol === "file:") {
+    return url;
+  }
 
   if (typedUrlObj.protocol !== "http:" && typedUrlObj.protocol !== "https:") {
     throw new Error("Invalid URL");

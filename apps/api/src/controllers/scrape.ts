@@ -9,7 +9,6 @@ import {
 } from "./types";
 import { v7 as uuidv7 } from "uuid";
 import { hasFormatOfType } from "../lib/format-utils";
-import { TransportableError } from "../lib/error";
 import { withErrorHandler } from "./error-wrapper";
 import { buildSyncScrapeJob } from "../services/job-factory";
 import { processJobInternal } from "../services/worker/scrape-worker";
