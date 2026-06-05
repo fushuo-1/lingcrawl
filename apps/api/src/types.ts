@@ -6,9 +6,10 @@ import {
   TeamFlags,
 } from "./controllers/types";
 // AuthCreditUsageChunk stub
-type AuthCreditUsageChunk = any;
+type AuthCreditUsageChunk = unknown;
 import { Document } from "./lib/entities";
 import { InternalOptions } from "./scraper/scrapeURL";
+import type { CrawlerOptions } from "./controllers/schemas/crawl";
 
 type ScrapeJobCommon = {
   concurrencyLimited?: boolean;
@@ -29,7 +30,7 @@ type ScrapeJobSingleUrlsUnique = {
   mode: "single_urls";
 
   url: string;
-  crawlerOptions?: any;
+  crawlerOptions?: CrawlerOptions;
   scrapeOptions: BaseScrapeOptions;
   internalOptions?: InternalOptions;
   origin: string;
@@ -56,7 +57,7 @@ type ScrapeJobKickoffUnique = {
   mode: "kickoff";
 
   url: string;
-  crawlerOptions?: any;
+  crawlerOptions?: CrawlerOptions;
   scrapeOptions: BaseScrapeOptions;
   internalOptions?: InternalOptions;
   origin: string;

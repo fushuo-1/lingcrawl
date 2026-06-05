@@ -55,7 +55,7 @@ export class Document {
   type?: string;
   metadata: {
     sourceURL?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   childrenLinks?: string[];
   provider?: string;

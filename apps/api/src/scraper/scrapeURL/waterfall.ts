@@ -161,9 +161,9 @@ export async function scrapeURLLoopIter(
 class WrappedEngineError extends Error {
   name = "WrappedEngineError";
   public engine: Engine;
-  public error: any;
+  public error: unknown;
 
-  constructor(engine: Engine, error: any) {
+  constructor(engine: Engine, error: unknown) {
     super("WrappedEngineError");
     this.engine = engine;
     this.error = error;

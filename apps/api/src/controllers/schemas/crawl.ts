@@ -12,6 +12,8 @@ export const crawlerOptions = z.strictObject({
   includePaths: z.string().array().prefault([]),
   excludePaths: z.string().array().prefault([]),
   maxDiscoveryDepth: z.number().optional(),
+  currentDiscoveryDepth: z.number().optional(),
+  urlInvisibleInCurrentCrawl: z.boolean().optional(),
   limit: z.number().prefault(10000), // default?
   crawlEntireDomain: z.boolean().optional(),
   allowExternalLinks: z.boolean().prefault(false),

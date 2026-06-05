@@ -38,7 +38,7 @@ import { isUrlBlocked } from "../../scraper/WebScraper/utils/blocklist";
 import { UNSUPPORTED_SITE_MESSAGE } from "../../lib/strings";
 // generateURLSplits, queryIndexAtSplitLevel removed with index service
 const generateURLSplits = (url: string): string[] => [url];
-const queryIndexAtSplitLevel = async (..._args: any[]): Promise<string[]> => [];
+const queryIndexAtSplitLevel = async (..._args: unknown[]): Promise<string[]> => [];
 import { WebCrawler } from "../../scraper/WebScraper/crawler";
 import type { Logger } from "winston";
 import {
@@ -382,8 +382,8 @@ async function handleError(
       logger.error(error.message); // or any other error handling
     }
     logger.error(error);
-    if ((error as any).stack) {
-      logger.error((error as any).stack);
+    if (error instanceof Error && error.stack) {
+      logger.error(error.stack);
     }
   }
 
@@ -400,8 +400,9 @@ async function handleError(
       error:
         typeof error === "string"
           ? error
-          : ((error as any).message ??
-            "Something went wrong... Contact help@mendable.ai"),
+          : (error instanceof Error
+            ? error.message
+            : "Something went wrong... Contact help@mendable.ai"),
       time_taken: timeTakenInSeconds,
       team_id: job.data.team_id,
       options: job.data.scrapeOptions,
@@ -905,7 +906,10 @@ export const processJobInternal = async (job: NuQJob<ScrapeJobData>) => {
   return processJobWithTracing(job, logger);
 };
 
-async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
+async function processJobWithTracing(
+  job: NuQJob<ScrapeJobData>,
+  logger: Logger,
+) {
   try {
     if (job.data.mode === "kickoff") {
       const result = await processKickoffJob(
@@ -914,7 +918,7 @@ async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
       if (result.success) {
         return null;
       } else {
-        throw (result as any).error;
+        throw result.error;
       }
     } else if (job.data.mode === "kickoff_sitemap") {
       const result = await processKickoffSitemapJob(
@@ -923,7 +927,7 @@ async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
       if (result.success) {
         return null;
       } else {
-        throw (result as any).error;
+        throw result.error;
       }
     } else {
       const result = await processJob(job as NuQJob<ScrapeJobSingleUrls>);
@@ -946,7 +950,7 @@ async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
           return result.document;
         } catch (e) {}
       } else {
-        throw (result as any).error;
+        throw (result as { success: false; document: null; error: Error }).error;
       }
     }
   } catch (error) {

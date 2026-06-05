@@ -16,8 +16,8 @@ import {
 import { redisEvictConnection } from "../services/redis";
 // generateURLSplits, queryIndexAtDomainSplitLevelWithMeta, queryIndexAtSplitLevelWithMeta removed with index service
 const generateURLSplits = (url: string): string[] => [url];
-const queryIndexAtDomainSplitLevelWithMeta = async (..._args: any[]) => [];
-const queryIndexAtSplitLevelWithMeta = async (..._args: any[]) => [];
+const queryIndexAtDomainSplitLevelWithMeta = async (..._args: unknown[]) => [];
+const queryIndexAtSplitLevelWithMeta = async (..._args: unknown[]) => [];
 import { performCosineSimilarityV2 } from "./map-cosine";
 import { Logger } from "winston";
 
@@ -343,7 +343,7 @@ export async function buildPromptWithWebsiteStructure({
     return { prompt, websiteUrls };
   } catch (e) {
     logger.warn("Failed to get website structure for prompt enhancement", {
-      error: (e as any)?.message ?? e,
+      error: e instanceof Error ? e.message : e,
     });
     return { prompt: basePrompt, websiteUrls: [] };
   }

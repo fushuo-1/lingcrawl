@@ -36,7 +36,7 @@ export async function _addScrapeJobToBullMQ(
 
 async function _addScrapeJobsToBullMQ(
   jobs: {
-    data: any;
+    data: ScrapeJobData;
     jobId: string;
     priority: number;
     listenable?: boolean;

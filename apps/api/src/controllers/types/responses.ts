@@ -1,6 +1,7 @@
 import type { ScrapeActionContent } from "../../lib/entities";
 import { ErrorCodes } from "../../lib/error";
 import type { CrawlerOptions } from "../schemas/crawl";
+import type { JsonValue } from "../../types/common";
 
 export type Document = {
   title?: string;
@@ -12,8 +13,8 @@ export type Document = {
   links?: string[];
   images?: string[];
   screenshot?: string;
-  extract?: any;
-  json?: any;
+  extract?: JsonValue;
+  json?: JsonValue;
   summary?: string;
   answer?: string;
   warning?: string;
@@ -55,7 +56,7 @@ export type Document = {
         }>;
       };
     };
-    json?: any;
+    json?: JsonValue;
   };
   metadata: {
     title?: string;
@@ -145,7 +146,7 @@ export type ErrorResponse = {
   success: false;
   code?: ErrorCodes;
   error: string;
-  details?: any;
+  details?: JsonValue;
 };
 
 export type ScrapeResponse =
@@ -180,7 +181,7 @@ export interface URLTrace {
 export interface ExtractResponse {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: JsonValue;
   scrape_id?: string;
   id?: string;
   warning?: string;
@@ -205,7 +206,7 @@ export type AgentStatusResponse =
       success: boolean;
       status: "processing" | "completed" | "failed";
       error?: string;
-      data?: any;
+      data?: JsonValue;
       model?: "spark-1-pro" | "spark-1-mini";
       expiresAt: string;
       creditsUsed?: number;
