@@ -8,9 +8,9 @@ import {
   parsersSchema,
   queryFormatWithOptions,
   screenshotFormatWithOptions,
+  strictWithMessage,
   URL,
 } from "./common";
-import { strictWithMessage } from "./crawl";
 
 const ACTIONS_MAX_WAIT_TIME = 60;
 const MAX_ACTIONS = 50;

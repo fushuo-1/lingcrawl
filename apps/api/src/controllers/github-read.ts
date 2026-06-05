@@ -1,44 +1,18 @@
 import { Request, Response } from "../lib/express-types";
 import { logger as _logger } from "../lib/logger";
 import { withErrorHandler } from "./error-wrapper";
+import {
+  parseGitHubUrl,
+  fetchRawFile,
+  fetchDirectory,
+  githubApiFetch,
+  type DirEntry,
+} from "../lib/github-fetch";
 
 interface GitHubReadRequest {
   url: string;
   path?: string;
   ref?: string;
-}
-
-function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
-  try {
-    const u = new URL(url);
-    if (u.hostname !== "github.com") return null;
-    const parts = u.pathname.split("/").filter(Boolean);
-    if (parts.length < 2) return null;
-    return { owner: parts[0], repo: parts[1].replace(/\.git$/, "") };
-  } catch {
-    return null;
-  }
-}
-
-async function githubFetch(path: string, ref?: string) {
-  const token = process.env.GITHUB_TOKEN;
-  const url = new URL(`https://api.github.com${path}`);
-  if (ref) url.searchParams.set("ref", ref);
-
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github.v3+json",
-    "User-Agent": "LingCrawl",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const res = await fetch(url.toString(), { headers });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`GitHub API ${res.status}: ${body}`);
-  }
-  return res.json();
 }
 
 export const githubReadController = withErrorHandler(async (
@@ -67,52 +41,117 @@ export const githubReadController = withErrorHandler(async (
   }
 
   const { owner, repo } = parsed;
-  const apiPath = path
-    ? `/repos/${owner}/${repo}/contents/${path}`
-    : `/repos/${owner}/${repo}/contents/`;
 
   try {
-    const data = await githubFetch(apiPath, ref);
+    // --- Read file (try raw first, fallback to API) ---
+    if (path && !path.endsWith("/")) {
+      try {
+        const content = await fetchRawFile(owner, repo, ref, path);
+        return res.status(200).json({
+          success: true,
+          data: {
+            type: "file",
+            name: path.split("/").pop(),
+            path,
+            content,
+            url: `https://github.com/${owner}/${repo}/blob/${ref ?? "main"}/${path}`,
+          },
+        });
+      } catch (rawErr) {
+        logger.info("Raw file fetch failed, falling back to API", {
+          error: rawErr instanceof Error ? rawErr.message : String(rawErr),
+        });
+        // Fallback to API
+        const apiPath = `/repos/${owner}/${repo}/contents/${path}`;
+        const data = await githubApiFetch(apiPath, ref);
+        const content = data.content
+          ? Buffer.from(data.content, "base64").toString("utf-8")
+          : null;
 
-    // If path points to a single file
-    if (!Array.isArray(data)) {
-      const content = data.content
-        ? Buffer.from(data.content, "base64").toString("utf-8")
-        : null;
+        return res.status(200).json({
+          success: true,
+          data: {
+            type: "file",
+            name: data.name,
+            path: data.path,
+            size: data.size,
+            content,
+            sha: data.sha,
+            url: data.html_url,
+          },
+        });
+      }
+    }
+
+    // --- List directory (try HTML parsing first, fallback to API) ---
+    const dirPath = path?.replace(/\/$/, "");
+    try {
+      const entries: DirEntry[] = await fetchDirectory(
+        owner,
+        repo,
+        ref,
+        dirPath || undefined,
+      );
+      return res.status(200).json({
+        success: true,
+        data: {
+          type: "directory",
+          path: dirPath || "/",
+          tree: entries.map((e) => ({
+            name: e.name,
+            path: e.path,
+            type: e.type,
+            url: `https://github.com/${owner}/${repo}/${e.type === "dir" ? "tree" : "blob"}/${ref ?? "main"}/${e.path}`,
+          })),
+          count: entries.length,
+        },
+      });
+    } catch (htmlErr) {
+      logger.info("HTML directory fetch failed, falling back to API", {
+        error: htmlErr instanceof Error ? htmlErr.message : String(htmlErr),
+      });
+      // Fallback to API
+      const apiPath = dirPath
+        ? `/repos/${owner}/${repo}/contents/${dirPath}`
+        : `/repos/${owner}/${repo}/contents/`;
+      const data = await githubApiFetch(apiPath, ref);
+
+      if (!Array.isArray(data)) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            type: "file",
+            name: data.name,
+            path: data.path,
+            size: data.size,
+            content: data.content
+              ? Buffer.from(data.content, "base64").toString("utf-8")
+              : null,
+            sha: data.sha,
+            url: data.html_url,
+          },
+        });
+      }
+
+      const tree = data.map((item: any) => ({
+        name: item.name,
+        path: item.path,
+        type: item.type,
+        size: item.size,
+        sha: item.sha,
+        url: item.html_url,
+      }));
 
       return res.status(200).json({
         success: true,
         data: {
-          type: "file",
-          name: data.name,
-          path: data.path,
-          size: data.size,
-          content,
-          sha: data.sha,
-          url: data.html_url,
+          type: "directory",
+          path: dirPath || "/",
+          tree,
+          count: tree.length,
         },
       });
     }
-
-    // If path points to a directory (or repo root)
-    const tree = data.map((item: any) => ({
-      name: item.name,
-      path: item.path,
-      type: item.type, // "file" or "dir"
-      size: item.size,
-      sha: item.sha,
-      url: item.html_url,
-    }));
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        type: "directory",
-        path: path || "/",
-        tree,
-        count: tree.length,
-      },
-    });
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     logger.error("GitHub read failed", { error, owner, repo, path });

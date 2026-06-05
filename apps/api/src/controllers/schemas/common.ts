@@ -168,3 +168,14 @@ export const parsersSchema = z
   .prefault(["pdf"]);
 
 export type Parsers = z.infer<typeof parsersSchema>;
+
+// Helper function to add strict validation
+// In zod v4, .strict() doesn't accept arguments
+// The custom error message is handled in the error handler (see src/index.ts)
+// We use a type assertion to preserve the input type so optional fields with defaults remain optional
+// The 'as any' is necessary because zod v4's .strict() changes type inference in a way that makes
+// optional fields with defaults appear required, even though they're not at runtime
+export function strictWithMessage<T extends z.ZodObject<any>>(schema: T): T {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return schema.strict() as any as T;
+}

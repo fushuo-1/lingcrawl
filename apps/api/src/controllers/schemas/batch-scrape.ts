@@ -1,13 +1,12 @@
 import { z } from "zod";
 import { integrationSchema } from "../../utils/integration";
-import { URL } from "./common";
+import { URL, strictWithMessage } from "./common";
 import {
   baseScrapeOptions,
   extractTransformRequired,
   waitForRefine,
   waitForRefineOpts,
 } from "./scrape";
-import { strictWithMessage } from "./crawl";
 
 const batchScrapeRequestSchemaBase = baseScrapeOptions.extend({
   urls: URL.array().min(1),
