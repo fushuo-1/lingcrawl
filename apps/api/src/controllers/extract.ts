@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response } from "../lib/express-types";
 import { processJobInternal } from "../services/worker/scrape-worker";
 import { scrapeRequestSchema } from "./types";
 import { withErrorHandler } from "./error-wrapper";

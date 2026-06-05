@@ -1,71 +1,120 @@
-import express from "express";
-import expressWs from "express-ws";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+
 import { searchController } from "../controllers/search";
 import { scrapeController } from "../controllers/scrape";
-import { batchScrapeController } from "../controllers/batch-scrape";
-import { crawlController } from "../controllers/crawl";
-import { crawlStatusController, batchCrawlStatusController } from "../controllers/crawl-status";
-import { mapController } from "../controllers/map";
-import { crawlErrorsController } from "../controllers/crawl-errors";
 import { scrapeStatusController } from "../controllers/scrape-status";
+import { batchScrapeController } from "../controllers/batch-scrape";
+import {
+  batchCrawlStatusController,
+  crawlStatusController,
+} from "../controllers/crawl-status";
 import { crawlCancelController } from "../controllers/crawl-cancel";
+import { crawlErrorsController } from "../controllers/crawl-errors";
+import { mapController } from "../controllers/map";
+import { crawlController } from "../controllers/crawl";
 import { crawlStatusWSController } from "../controllers/crawl-status-ws";
 import { githubReadController } from "../controllers/github-read";
 import { linksController } from "../controllers/links";
 import { extractController } from "../controllers/extract";
 import {
-  blocklistMiddleware,
-  idempotencyMiddleware,
-  requestTimingMiddleware,
-  wrap,
+  blocklistHook,
+  idempotencyHook,
+  validateJobIdHook,
   isValidJobId,
-  validateJobIdParam,
+  registerTimingHooks,
 } from "./shared";
 
-expressWs(express());
+/**
+ * Express-to-Fastify adapter (temporary, replaced when controllers are migrated).
+ * Awaits the controller so async errors propagate to Fastify's setErrorHandler.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function adapt(controller: (req: any, res: any) => Promise<any>) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    await controller(request, reply);
+  };
+}
 
-export const apiRouter = express.Router();
+export default async function apiRoutes(fastify: FastifyInstance) {
+  await registerTimingHooks(fastify);
 
-apiRouter.use(requestTimingMiddleware("api"));
+  const writePre = [blocklistHook, idempotencyHook];
 
-// Search
-apiRouter.post("/search", blocklistMiddleware, wrap(searchController));
+  // Search
+  fastify.post("/search", { preHandler: writePre }, adapt(searchController));
 
-// Scrape
-apiRouter.post("/scrape", blocklistMiddleware, wrap(scrapeController));
-apiRouter.get("/scrape/:jobId", validateJobIdParam, wrap(scrapeStatusController));
+  // Scrape
+  fastify.post("/scrape", { preHandler: writePre }, adapt(scrapeController));
+  fastify.get(
+    "/scrape/:jobId",
+    { preHandler: validateJobIdHook },
+    adapt(scrapeStatusController),
+  );
 
-// Batch Scrape
-apiRouter.post("/batch/scrape", blocklistMiddleware, wrap(batchScrapeController));
-apiRouter.get("/batch/scrape/:jobId", validateJobIdParam, wrap(batchCrawlStatusController));
-apiRouter.delete("/batch/scrape/:jobId", validateJobIdParam, wrap(crawlCancelController));
-apiRouter.get("/batch/scrape/:jobId/errors", wrap(crawlErrorsController));
+  // Batch Scrape
+  fastify.post(
+    "/batch/scrape",
+    { preHandler: writePre },
+    adapt(batchScrapeController),
+  );
+  fastify.get(
+    "/batch/scrape/:jobId",
+    { preHandler: validateJobIdHook },
+    adapt(batchCrawlStatusController),
+  );
+  fastify.delete(
+    "/batch/scrape/:jobId",
+    { preHandler: validateJobIdHook },
+    adapt(crawlCancelController),
+  );
+  fastify.get(
+    "/batch/scrape/:jobId/errors",
+    adapt(crawlErrorsController),
+  );
 
-// Map
-apiRouter.post("/map", blocklistMiddleware, wrap(mapController));
+  // Map
+  fastify.post("/map", { preHandler: writePre }, adapt(mapController));
 
-// Crawl
-apiRouter.post("/crawl", blocklistMiddleware, idempotencyMiddleware, wrap(crawlController));
-apiRouter.get("/crawl/:jobId", validateJobIdParam, wrap(crawlStatusController));
-apiRouter.delete("/crawl/:jobId", validateJobIdParam, wrap(crawlCancelController));
-apiRouter.ws(
-  "/crawl/:jobId",
-  ((ws: any, req: express.Request, next: (err?: unknown) => void) => {
-    if (!isValidJobId(req.params.jobId)) {
-      ws.close(1008, "Invalid job ID");
-      return;
-    }
-    next();
-  }) as any,
-  crawlStatusWSController,
-);
-apiRouter.get("/crawl/:jobId/errors", validateJobIdParam, wrap(crawlErrorsController));
+  // Crawl
+  fastify.post("/crawl", { preHandler: writePre }, adapt(crawlController));
+  fastify.get(
+    "/crawl/:jobId",
+    { preHandler: validateJobIdHook },
+    adapt(crawlStatusController),
+  );
+  fastify.delete(
+    "/crawl/:jobId",
+    { preHandler: validateJobIdHook },
+    adapt(crawlCancelController),
+  );
+  // WebSocket route for real-time crawl status
+  fastify.get(
+    "/crawl/:jobId",
+    {
+      websocket: true,
+      preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
+        const { jobId } = request.params as { jobId: string };
+        if (!isValidJobId(jobId)) {
+          return reply.code(400).send({ success: false, error: "Invalid job ID" });
+        }
+      },
+    },
+    (socket, request) => {
+      crawlStatusWSController(socket, request);
+    },
+  );
+  fastify.get(
+    "/crawl/:jobId/errors",
+    { preHandler: validateJobIdHook },
+    adapt(crawlErrorsController),
+  );
 
-// GitHub Read
-apiRouter.post("/github/read", wrap(githubReadController));
+  // GitHub Read
+  fastify.post("/github/read", adapt(githubReadController));
 
-// Links
-apiRouter.post("/links", wrap(linksController));
+  // Links
+  fastify.post("/links", adapt(linksController));
 
-// Extract (dual mode: fulltext or LLM)
-apiRouter.post("/extract", wrap(extractController));
+  // Extract (dual mode: fulltext or LLM)
+  fastify.post("/extract", adapt(extractController));
+}

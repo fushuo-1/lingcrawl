@@ -1,5 +1,4 @@
-import { Request, Response } from "express";
-import { logger as _logger } from "../lib/logger";
+import { Request, Response } from "../lib/express-types";
 import { extractLinks } from "../scraper/scrapeURL/lib/extractLinks";
 import * as undici from "undici";
 import { withErrorHandler } from "./error-wrapper";

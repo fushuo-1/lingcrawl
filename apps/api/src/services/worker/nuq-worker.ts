@@ -5,8 +5,7 @@ import { processJobInternal } from "./scrape-worker";
 import { scrapeQueue, nuqGetLocalMetrics, nuqHealthCheck } from "./nuq";
 import { jobDurationSeconds } from "../../lib/job-metrics";
 import { register } from "prom-client";
-import Express from "express";
-import { _ } from "ajv";
+import http from "node:http";
 import { initializeBlocklist } from "../../scraper/WebScraper/utils/blocklist";
 import { initializeEngineForcing } from "../../scraper/WebScraper/utils/engine-forcing";
 
@@ -23,22 +22,25 @@ import { initializeEngineForcing } from "../../scraper/WebScraper/utils/engine-f
 
   let isShuttingDown = false;
 
-  const app = Express();
-
-  app.get("/metrics", async (_, res) =>
-    res
-      .contentType("text/plain")
-      .send(nuqGetLocalMetrics() + "\n" + (await register.metrics())),
-  );
-  app.get("/health", async (_, res) => {
-    if (await nuqHealthCheck()) {
-      res.status(200).send("OK");
+  const server = http.createServer(async (req, res) => {
+    if (req.url === "/metrics") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end(nuqGetLocalMetrics() + "\n" + (await register.metrics()));
+    } else if (req.url === "/health") {
+      if (await nuqHealthCheck()) {
+        res.writeHead(200);
+        res.end("OK");
+      } else {
+        res.writeHead(500);
+        res.end("Not OK");
+      }
     } else {
-      res.status(500).send("Not OK");
+      res.writeHead(404);
+      res.end();
     }
   });
 
-  const server = app.listen(config.NUQ_WORKER_PORT, () => {
+  server.listen(config.NUQ_WORKER_PORT, () => {
     _logger.info("NuQ worker metrics server started");
   });
 

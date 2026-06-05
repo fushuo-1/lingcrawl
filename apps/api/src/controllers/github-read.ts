@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response } from "../lib/express-types";
 import { logger as _logger } from "../lib/logger";
 import { withErrorHandler } from "./error-wrapper";
 

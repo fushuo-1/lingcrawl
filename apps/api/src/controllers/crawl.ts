@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Response } from "../lib/express-types";
 import { v7 as uuidv7 } from "uuid";
 import {
   CrawlRequest,

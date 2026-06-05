@@ -1,22 +1,30 @@
 import { ErrorCodes, TransportableError } from "../../lib/error";
-import { Meta } from ".";
-import { Engine, FeatureFlag } from "./engines";
-import { isSelfHosted } from "../../lib/deployment";
+import { Engine } from "./engines";
 
-export class EngineError extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-  }
-}
+// NOTE: Control-flow signal errors (AddFeatureError, RemoveFeatureError,
+// EngineError, IndexMissError, FEPageLoadFailed, EngineSnipedError,
+// EngineUnsuccessfulError, WaterfallNextEngineSignal) live in ./signals.ts.
+// They are re-exported from this module for backwards compatibility so that
+// `import { AddFeatureError } from "./error"` keeps working. Transportable
+// errors (NoEnginesLeftError, SSLError, SiteError, ...) remain defined here.
+
+export {
+  AddFeatureError,
+  RemoveFeatureError,
+  EngineError,
+  IndexMissError,
+  FEPageLoadFailed,
+  EngineSnipedError,
+  EngineUnsuccessfulError,
+  WaterfallNextEngineSignal,
+} from "./signals";
 
 export class NoEnginesLeftError extends TransportableError {
   public fallbackList: Engine[];
 
   constructor(fallbackList: Engine[]) {
     const enginesTriedStr = fallbackList.join(", ");
-    const message = isSelfHosted()
-      ? `All scraping engines failed to retrieve content from this URL. Engines tried: [${enginesTriedStr}]. This usually happens when: (1) The URL is invalid or the page doesn't exist (404), (2) The website is blocking automated access, (3) The website is down or unreachable, (4) The page requires authentication. Double check the URL is correct and accessible in a browser. Check your server logs for more detailed error information from each engine.`
-      : `All scraping engines failed to retrieve content from this URL. Engines tried: [${enginesTriedStr}]. This usually happens when: (1) The URL is invalid or the page doesn't exist (404), (2) The website is blocking automated access, (3) The website is down or unreachable, (4) The page requires authentication. Double check the URL is correct and accessible in a browser. If the issue persists, contact us at help@lingcrawl.com with your request ID for investigation.`;
+    const message = `All scraping engines failed to retrieve content from this URL. Engines tried: [${enginesTriedStr}]. This usually happens when: (1) The URL is invalid or the page doesn't exist (404), (2) The website is blocking automated access, (3) The website is down or unreachable, (4) The page requires authentication. Double check the URL is correct and accessible in a browser. Check your server logs for more detailed error information from each engine.`;
 
     super("SCRAPE_ALL_ENGINES_FAILED", message);
     this.fallbackList = fallbackList;
@@ -36,35 +44,6 @@ export class NoEnginesLeftError extends TransportableError {
     const x = new NoEnginesLeftError(data.fallbackList);
     x.stack = data.stack;
     return x;
-  }
-}
-
-export class AddFeatureError extends Error {
-  public featureFlags: FeatureFlag[];
-  public pdfPrefetch: Meta["pdfPrefetch"];
-  public documentPrefetch: Meta["documentPrefetch"];
-
-  constructor(
-    featureFlags: FeatureFlag[],
-    pdfPrefetch?: Meta["pdfPrefetch"],
-    documentPrefetch?: Meta["documentPrefetch"],
-  ) {
-    super("New feature flags have been discovered: " + featureFlags.join(", "));
-    this.featureFlags = featureFlags;
-    this.pdfPrefetch = pdfPrefetch;
-    this.documentPrefetch = documentPrefetch;
-  }
-}
-
-export class RemoveFeatureError extends Error {
-  public featureFlags: FeatureFlag[];
-
-  constructor(featureFlags: FeatureFlag[]) {
-    super(
-      "Incorrect feature flags have been discovered: " +
-        featureFlags.join(", "),
-    );
-    this.featureFlags = featureFlags;
   }
 }
 
@@ -301,12 +280,6 @@ export class DNSResolutionError extends TransportableError {
   }
 }
 
-export class IndexMissError extends Error {
-  constructor() {
-    super("Index doesn't have the page we're looking for");
-  }
-}
-
 export class NoCachedDataError extends TransportableError {
   constructor() {
     super(
@@ -381,9 +354,7 @@ export class PDFOCRRequiredError extends TransportableError {
 
 export class PDFPrefetchFailed extends TransportableError {
   constructor() {
-    const message = isSelfHosted()
-      ? "Failed to prefetch the PDF file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the PDF is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. Check your server logs for more details about the specific protection mechanism encountered."
-      : "Failed to prefetch the PDF file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the PDF is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. If this is a business-critical URL, please contact help@lingcrawl.com with the URL and we can investigate adding specific support for this site.";
+    const message = "Failed to prefetch the PDF file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the PDF is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. Check your server logs for more details about the specific protection mechanism encountered.";
 
     super("SCRAPE_PDF_PREFETCH_FAILED", message);
   }
@@ -426,9 +397,7 @@ export class DocumentAntibotError extends TransportableError {
 
 export class DocumentPrefetchFailed extends TransportableError {
   constructor() {
-    const message = isSelfHosted()
-      ? "Failed to prefetch the document file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the document (DOCX, XLSX, etc.) is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. Check your server logs for more details about the specific protection mechanism encountered."
-      : "Failed to prefetch the document file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the document (DOCX, XLSX, etc.) is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. If this is a business-critical URL, please contact help@lingcrawl.com with the URL and we can investigate adding specific support for this site.";
+    const message = "Failed to prefetch the document file because the website's anti-bot protection blocked the initial download attempt. This typically happens when the document (DOCX, XLSX, etc.) is protected by a CAPTCHA, login wall, or aggressive bot detection. LingCrawl tried to bypass the protection but was unsuccessful. Check your server logs for more details about the specific protection mechanism encountered.";
 
     super("SCRAPE_DOCUMENT_PREFETCH_FAILED", message);
   }
@@ -444,38 +413,6 @@ export class DocumentPrefetchFailed extends TransportableError {
     const x = new DocumentPrefetchFailed();
     x.stack = data.stack;
     return x;
-  }
-}
-
-export class FEPageLoadFailed extends Error {
-  constructor() {
-    super(
-      "The page failed to load with the specified timeout. Please increase the timeout parameter in your request.",
-    );
-  }
-}
-
-export class EngineSnipedError extends Error {
-  name = "EngineSnipedError";
-
-  constructor() {
-    super("Engine got sniped");
-  }
-}
-
-export class EngineUnsuccessfulError extends Error {
-  name = "EngineUnsuccessfulError";
-
-  constructor(engine: Engine) {
-    super(`Engine ${engine} was unsuccessful`);
-  }
-}
-
-export class WaterfallNextEngineSignal extends Error {
-  name = "WaterfallNextEngineSignal";
-
-  constructor() {
-    super("Waterfall next engine");
   }
 }
 

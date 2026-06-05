@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Response } from "../lib/express-types";
 import { logger as _logger } from "../lib/logger";
 import {
   Document,
@@ -9,14 +9,13 @@ import {
 } from "./types";
 import { v7 as uuidv7 } from "uuid";
 import { hasFormatOfType } from "../lib/format-utils";
-import { TransportableError } from "../lib/error";
 import { withErrorHandler } from "./error-wrapper";
 import { buildSyncScrapeJob } from "../services/job-factory";
 import { processJobInternal } from "../services/worker/scrape-worker";
 import { teamConcurrencySemaphore } from "../services/worker/team-semaphore";
 import { logRequest } from "../services/logging/log_job";
 
-import { Request } from "express";
+import { Request } from "../lib/express-types";
 
 export const scrapeController = withErrorHandler(async (
   req: Request<{}, ScrapeResponse, ScrapeRequest>,

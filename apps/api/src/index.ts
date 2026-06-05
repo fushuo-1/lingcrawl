@@ -1,29 +1,23 @@
 import "dotenv/config";
 import { config } from "./config";
-import express, { NextFunction, Request, Response } from "express";
-import bodyParser from "body-parser";
-import cors from "cors";
+import Fastify, { FastifyInstance } from "fastify";
+import cors from "@fastify/cors";
+import formbody from "@fastify/formbody";
+import websocket from "@fastify/websocket";
 
-import { apiRouter } from "./routes/api";
-import { adminRouter } from "./routes/admin";
+import apiRouter from "./routes/api";
+import mcpRouter from "./mcp/transport";
 import os from "os";
 import { logger } from "./lib/logger";
 import http from "node:http";
 import https from "node:https";
-import expressWs from "express-ws";
-import {
-  ErrorResponse,
-  RequestWithMaybeACUC,
-} from "./controllers/types";
-import { ZodError } from "zod";
-import { QueueFullError } from "./services/queue-jobs";
 import { v7 as uuidv7 } from "uuid";
 import { cacheableLookup } from "./scraper/scrapeURL/lib/cacheableLookup";
 import { nuqShutdown } from "./services/worker/nuq";
-import { getErrorContactMessage } from "./lib/deployment";
 import { initializeBlocklist } from "./scraper/WebScraper/utils/blocklist";
 import { initializeEngineForcing } from "./scraper/WebScraper/utils/engine-forcing";
-import responseTime from "response-time";
+import { ZodError } from "zod";
+import { QueueFullError } from "./services/queue-jobs";
 
 const numCPUs = config.ENV === "local" ? 2 : os.cpus().length;
 logger.info(`Number of CPUs: ${numCPUs} available`);
@@ -32,49 +26,104 @@ logger.info("Network info dump", {
   networkInterfaces: os.networkInterfaces(),
 });
 
-// Install cacheable lookup for all other requests
 cacheableLookup.install(http.globalAgent);
 cacheableLookup.install(https.globalAgent);
 
-// Initialize Express with WebSocket support
-const expressApp = express();
-const ws = expressWs(expressApp);
-const app = ws.app;
+const app: FastifyInstance = Fastify({
+  bodyLimit: 10 * 1024 * 1024,
+  logger: false,
+});
 
 global.isProduction = config.IS_PRODUCTION;
 
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json({ limit: "10mb" }));
+app.get("/", async () => ({
+  message: "LingCrawl API",
+  documentation_url: "https://docs.lingcrawl.dev",
+}));
 
-app.use(cors()); // Add this line to enable CORS
+app.get("/e2e-test", async () => "OK");
 
-app.use(responseTime());
+app.get("/health/liveness", async () => ({ status: "ok" }));
+app.get("/health/readiness", async () => ({ status: "ok" }));
+app.get("/is-production", async () => ({ isProduction: global.isProduction }));
 
-app.disable("x-powered-by");
+app.setErrorHandler((error, request, reply) => {
+  if (error instanceof QueueFullError) {
+    return reply.code(429).send({
+      success: false,
+      error: error.message,
+    });
+  } else if (error instanceof ZodError) {
+    const issues = error.issues;
+    if (
+      Array.isArray(issues) &&
+      issues.find((x: any) => x.message === "URL uses unsupported protocol")
+    ) {
+      logger.warn("Unsupported protocol error: " + JSON.stringify(request.body));
+    }
 
-app.get("/", (_, res) => {
-  res.json({
-    message: "LingCrawl API",
-    documentation_url: "https://docs.lingcrawl.dev",
-  });
+    const hasUnrecognizedKeys = issues.some(
+      (e: any) => e.code === "unrecognized_keys",
+    );
+    const strictMessage =
+      "Unrecognized key in body -- please review the v2 API documentation for request body changes";
+
+    const customErrorMessage = hasUnrecognizedKeys
+      ? strictMessage
+      : issues.length > 0 && issues[0].code === "custom"
+        ? issues[0].message
+        : "Bad Request";
+
+    return reply.code(400).send({
+      success: false,
+      code: "BAD_REQUEST",
+      error: customErrorMessage,
+      details: issues,
+    });
+  } else if (
+    error instanceof SyntaxError &&
+    "status" in error &&
+    (error as any).status === 400 &&
+    "body" in error
+  ) {
+    return reply.code(400).send({
+      success: false,
+      code: "BAD_REQUEST_INVALID_JSON",
+      error: "Bad request, malformed JSON",
+    });
+  } else {
+    const id = uuidv7();
+    logger.error(
+      "Error occurred in request! (" + request.url + ") -- ID " + id + " -- ",
+      {
+        error,
+        errorId: id,
+        path: request.url,
+        teamId: (request as any).acuc?.team_id,
+        team_id: (request as any).acuc?.team_id,
+      },
+    );
+    return reply.code(500).send({
+      success: false,
+      code: "UNKNOWN_ERROR",
+      error: `An error occurred. Please check your logs for more details. Error ID: ${id}`,
+    });
+  }
 });
 
-app.get("/e2e-test", (_, res) => {
-  res.status(200).send("OK");
-});
-
-// Health check endpoints (migrated from V0)
-app.get("/health/liveness", (_, res) => res.status(200).json({ status: "ok" }));
-app.get("/health/readiness", (_, res) => res.status(200).json({ status: "ok" }));
-
-// register router
-app.use("/api", apiRouter);
-app.use(adminRouter);
+logger.info(`Worker ${process.pid} started`);
 
 const DEFAULT_PORT = config.PORT;
 const HOST = config.HOST;
 
 async function startServer(port = DEFAULT_PORT) {
+  await app.register(cors);
+  await app.register(formbody);
+  await app.register(websocket);
+
+  await app.register(apiRouter, { prefix: "/api" });
+  await app.register(mcpRouter);
+
   try {
     await initializeBlocklist();
     initializeEngineForcing();
@@ -85,32 +134,26 @@ async function startServer(port = DEFAULT_PORT) {
     throw error;
   }
 
-  // Attach WebSocket proxy to the Express app
-
-  const server = app.listen(Number(port), HOST, () => {
-    logger.info(`Worker ${process.pid} listening on port ${port}`);
-  });
+  await app.listen({ port: Number(port), host: HOST });
+  logger.info(`Worker ${process.pid} listening on port ${port}`);
 
   const exitHandler = async () => {
     logger.info("SIGTERM signal received: closing HTTP server");
     if (config.IS_KUBERNETES) {
-      // Account for GCE load balancer drain timeout
       logger.info("Waiting 60s for GCE load balancer drain timeout");
       await new Promise(resolve => setTimeout(resolve, 60000));
     }
-    server.close(async () => {
-      logger.info("Server closed.");
-      await nuqShutdown();
-      logger.info("NUQ shutdown complete");
-      process.exit(0);
-    });
+    await app.close();
+    await nuqShutdown();
+    logger.info("NUQ shutdown complete");
+    process.exit(0);
   };
 
   if (require.main === module) {
     process.on("SIGTERM", exitHandler);
     process.on("SIGINT", exitHandler);
   }
-  return server;
+  return app;
 }
 
 if (require.main === module) {
@@ -120,101 +163,4 @@ if (require.main === module) {
   });
 }
 
-app.get("/is-production", (req, res) => {
-  res.send({ isProduction: global.isProduction });
-});
-
-app.use(
-  (
-    err: unknown,
-    req: Request<{}, ErrorResponse, undefined>,
-    res: Response<ErrorResponse>,
-    next: NextFunction,
-  ) => {
-    if (err instanceof QueueFullError) {
-      res.status(429).json({
-        success: false,
-        error: err.message,
-      });
-    } else if (err instanceof ZodError) {
-      // In zod v4, ZodError uses 'issues' instead of 'errors'
-      const issues = err.issues;
-
-      if (
-        Array.isArray(issues) &&
-        issues.find(x => x.message === "URL uses unsupported protocol")
-      ) {
-        logger.warn("Unsupported protocol error: " + JSON.stringify(req.body));
-      }
-
-      // Check for unrecognized_keys errors and replace with custom message
-      const hasUnrecognizedKeys = issues.some(
-        e => e.code === "unrecognized_keys",
-      );
-      const strictMessage =
-        "Unrecognized key in body -- please review the v2 API documentation for request body changes";
-
-      const customErrorMessage = hasUnrecognizedKeys
-        ? strictMessage
-        : issues.length > 0 && issues[0].code === "custom"
-          ? issues[0].message
-          : "Bad Request";
-
-      res.status(400).json({
-        success: false,
-        code: "BAD_REQUEST",
-        error: customErrorMessage,
-        details: issues,
-      });
-    } else {
-      next(err);
-    }
-  },
-);
-
-// Pass-through error-logger middleware
-app.use((err: unknown, _req: Request, _res: Response, next: NextFunction) => {
-  next(err);
-});
-
-app.use(
-  (
-    err: unknown,
-    req: RequestWithMaybeACUC<{}, ErrorResponse, undefined>,
-    res: Response<ErrorResponse>,
-    next: NextFunction,
-  ) => {
-    if (
-      err instanceof SyntaxError &&
-      "status" in err &&
-      err.status === 400 &&
-      "body" in err
-    ) {
-      return res.status(400).json({
-        success: false,
-        code: "BAD_REQUEST_INVALID_JSON",
-        error: "Bad request, malformed JSON",
-      });
-    }
-
-    const id = uuidv7();
-
-    logger.error(
-      "Error occurred in request! (" + req.path + ") -- ID " + id + " -- ",
-      {
-        error: err,
-        errorId: id,
-        path: req.path,
-        teamId: req.acuc?.team_id,
-        team_id: req.acuc?.team_id,
-      },
-    );
-    res.status(500).json({
-      success: false,
-      code: "UNKNOWN_ERROR",
-      error: getErrorContactMessage(id),
-    });
-  },
-);
-
-logger.info(`Worker ${process.pid} started`);
+export { app, startServer };

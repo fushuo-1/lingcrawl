@@ -3,12 +3,7 @@ jest.mock("uuid", () => ({
 }));
 
 import { scrapeSearchResults } from "./scrape";
-import { getJobPriority } from "../lib/job-priority";
 import { processJobInternal } from "../services/worker/scrape-worker";
-
-jest.mock("../lib/job-priority", () => ({
-  getJobPriority: jest.fn().mockResolvedValue(10),
-}));
 
 jest.mock("../services/worker/scrape-worker", () => ({
   processJobInternal: jest.fn().mockResolvedValue({
@@ -40,10 +35,6 @@ describe("scrapeSearchResults", () => {
       null as any,
     );
 
-    expect(getJobPriority).toHaveBeenCalledWith({
-      team_id: "team-1",
-      basePriority: 10,
-    });
     expect(processJobInternal).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

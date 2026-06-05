@@ -1,10 +1,8 @@
 import { configDotenv } from "dotenv";
-import { config } from "../../config";
 import http from "http";
 import https from "https";
 
 import { logger as _logger } from "../../lib/logger";
-import { addJobPriority, deleteJobPriority } from "../../lib/job-priority";
 import { cacheableLookup } from "../../scraper/scrapeURL/lib/cacheableLookup";
 import { v7 as uuidv7 } from "uuid";
 import {
@@ -30,7 +28,6 @@ import {
   addScrapeJobs,
 } from "../queue-jobs";
 import psl from "psl";
-import { getJobPriority } from "../../lib/job-priority";
 import { Document, scrapeOptions } from "../../controllers/types";
 import { hasFormatOfType } from "../../lib/format-utils";
 import { getACUCTeam } from "../../controllers/auth";
@@ -41,7 +38,7 @@ import { isUrlBlocked } from "../../scraper/WebScraper/utils/blocklist";
 import { UNSUPPORTED_SITE_MESSAGE } from "../../lib/strings";
 // generateURLSplits, queryIndexAtSplitLevel removed with index service
 const generateURLSplits = (url: string): string[] => [url];
-const queryIndexAtSplitLevel = async (..._args: any[]): Promise<string[]> => [];
+const queryIndexAtSplitLevel = async (..._args: unknown[]): Promise<string[]> => [];
 import { WebCrawler } from "../../scraper/WebScraper/crawler";
 import type { Logger } from "winston";
 import {
@@ -190,10 +187,7 @@ async function handleCrawlResult(
         for (const link of links.links) {
           if (await lockURL(crawlId, sc, link)) {
             // This seems to work really welel
-            const jobPriority = await getJobPriority({
-              team_id: sc.team_id,
-              basePriority: crawlId ? 20 : 10,
-            });
+            const jobPriority = crawlId ? 20 : 10;
             const jobId = uuidv7();
 
             logger.debug(
@@ -388,8 +382,8 @@ async function handleError(
       logger.error(error.message); // or any other error handling
     }
     logger.error(error);
-    if ((error as any).stack) {
-      logger.error((error as any).stack);
+    if (error instanceof Error && error.stack) {
+      logger.error(error.stack);
     }
   }
 
@@ -406,8 +400,9 @@ async function handleError(
       error:
         typeof error === "string"
           ? error
-          : ((error as any).message ??
-            "Something went wrong... Contact help@mendable.ai"),
+          : (error instanceof Error
+            ? error.message
+            : "Something went wrong... Contact help@mendable.ai"),
       time_taken: timeTakenInSeconds,
       team_id: job.data.team_id,
       options: job.data.scrapeOptions,
@@ -677,7 +672,7 @@ async function processKickoffJob(job: NuQJob<ScrapeJobKickoff>) {
         apiKeyId: job.data.apiKeyId,
       },
       jobId,
-      await getJobPriority({ team_id: job.data.team_id, basePriority: 15 }),
+      15,
     );
     logger.debug("Adding scrape job to BullMQ...", { jobId });
     await addCrawlJob(job.data.crawl_id, jobId, logger);
@@ -721,10 +716,7 @@ async function processKickoffJob(job: NuQJob<ScrapeJobKickoff>) {
         indexLinksLength: indexLinks.length,
       });
 
-      let jobPriority = await getJobPriority({
-        team_id: job.data.team_id,
-        basePriority: 21,
-      });
+      let jobPriority = 21;
       logger.debug("Using job priority " + jobPriority, { jobPriority });
 
       const jobs = indexLinks.map(url => {
@@ -835,10 +827,7 @@ async function processKickoffSitemapJob(job: NuQJob<ScrapeJobKickoffSitemap>) {
         urlsLength: passingURLs.length,
       });
 
-      const jobPriority = await getJobPriority({
-        team_id: job.data.team_id,
-        basePriority: 21,
-      });
+      const jobPriority = 21;
 
       const jobs = passingURLs.map(url => ({
         data: {
@@ -917,55 +906,53 @@ export const processJobInternal = async (job: NuQJob<ScrapeJobData>) => {
   return processJobWithTracing(job, logger);
 };
 
-async function processJobWithTracing(job: NuQJob<ScrapeJobData>, logger: any) {
+async function processJobWithTracing(
+  job: NuQJob<ScrapeJobData>,
+  logger: Logger,
+) {
   try {
-    await addJobPriority(job.data.team_id, job.id);
-      try {
-        if (job.data.mode === "kickoff") {
-          const result = await processKickoffJob(
-            job as NuQJob<ScrapeJobKickoff>,
-          );
-          if (result.success) {
-            return null;
-          } else {
-            throw (result as any).error;
-          }
-        } else if (job.data.mode === "kickoff_sitemap") {
-          const result = await processKickoffSitemapJob(
-            job as NuQJob<ScrapeJobKickoffSitemap>,
-          );
-          if (result.success) {
-            return null;
-          } else {
-            throw (result as any).error;
-          }
-        } else {
-          const result = await processJob(job as NuQJob<ScrapeJobSingleUrls>);
-          if (result.success) {
-            try {
-              if (job.data.team_id) {
-                await redisEvictConnection.set(
-                  "most-recent-success:" + job.data.team_id,
-                  new Date().toISOString(),
-                  "EX",
-                  60 * 60 * 24,
-                );
-              }
-            } catch (e) {
-              logger.warn("Failed to set most recent success", { error: e });
-            }
-
-            try {
-              logger.debug("Job succeeded -- putting result in Redis");
-              return result.document;
-            } catch (e) {}
-          } else {
-            throw (result as any).error;
-          }
-        }
-      } finally {
-        await deleteJobPriority(job.data.team_id, job.id);
+    if (job.data.mode === "kickoff") {
+      const result = await processKickoffJob(
+        job as NuQJob<ScrapeJobKickoff>,
+      );
+      if (result.success) {
+        return null;
+      } else {
+        throw result.error;
       }
+    } else if (job.data.mode === "kickoff_sitemap") {
+      const result = await processKickoffSitemapJob(
+        job as NuQJob<ScrapeJobKickoffSitemap>,
+      );
+      if (result.success) {
+        return null;
+      } else {
+        throw result.error;
+      }
+    } else {
+      const result = await processJob(job as NuQJob<ScrapeJobSingleUrls>);
+      if (result.success) {
+        try {
+          if (job.data.team_id) {
+            await redisEvictConnection.set(
+              "most-recent-success:" + job.data.team_id,
+              new Date().toISOString(),
+              "EX",
+              60 * 60 * 24,
+            );
+          }
+        } catch (e) {
+          logger.warn("Failed to set most recent success", { error: e });
+        }
+
+        try {
+          logger.debug("Job succeeded -- putting result in Redis");
+          return result.document;
+        } catch (e) {}
+      } else {
+        throw (result as { success: false; document: null; error: Error }).error;
+      }
+    }
   } catch (error) {
     logger.warn("Job failed", { error });
 

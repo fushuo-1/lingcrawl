@@ -1,10 +1,13 @@
-import { Request } from "express";
 import { validate as isUuid } from "uuid";
-import { logger } from "../../../src/lib/logger";
+import { logger } from "../../lib/logger";
+
+type HeadersBag = Record<string, string | string[] | undefined>;
 
 // Without a database, all idempotency keys are considered valid (not duplicates).
-export async function validateIdempotencyKey(req: Request): Promise<boolean> {
-  const idempotencyKey = req.headers["x-idempotency-key"];
+export async function validateIdempotencyKey(
+  headers: HeadersBag,
+): Promise<boolean> {
+  const idempotencyKey = headers["x-idempotency-key"];
   if (!idempotencyKey) {
     return true;
   }

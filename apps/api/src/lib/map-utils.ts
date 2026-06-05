@@ -13,12 +13,11 @@ import {
   isSameSubdomain,
   resolveRedirects,
 } from "./validateUrl";
-import { fireEngineMap } from "../search/fireEngine";
 import { redisEvictConnection } from "../services/redis";
 // generateURLSplits, queryIndexAtDomainSplitLevelWithMeta, queryIndexAtSplitLevelWithMeta removed with index service
 const generateURLSplits = (url: string): string[] => [url];
-const queryIndexAtDomainSplitLevelWithMeta = async (..._args: any[]) => [];
-const queryIndexAtSplitLevelWithMeta = async (..._args: any[]) => [];
+const queryIndexAtDomainSplitLevelWithMeta = async (..._args: unknown[]) => [];
+const queryIndexAtSplitLevelWithMeta = async (..._args: unknown[]) => [];
 import { performCosineSimilarityV2 } from "./map-cosine";
 import { Logger } from "winston";
 
@@ -191,59 +190,14 @@ export async function getMapResults({
         .filter(x => x !== null) as MapDocument[];
     }
   } else {
-    let urlWithoutWww = url.replace("www.", "");
-    let mapUrl =
-      search && allowExternalLinks
-        ? `${search} ${urlWithoutWww}`
-        : search
-          ? `${search} site:${urlWithoutWww}`
-          : `site:${url}`;
+    const cacheKey = `mapResults:${url}`;
 
-    const resultsPerPage = 100;
-    const maxPages = Math.ceil(
-      Math.min(maxFireEngineResults, limit) / resultsPerPage,
-    );
-
-    const cacheKey = `fireEngineMap:${mapUrl}`;
-    const cachedResult = ignoreCache
-      ? null
-      : await redisEvictConnection.get(cacheKey);
-
-    const fetchPage = async (page: number) => {
-      return await fireEngineMap(
-        mapUrl,
-        {
-          numResults: resultsPerPage,
-          page,
-        },
-        abort,
-      );
-    };
-
-    const fetchAllPages = async (): Promise<any[]> => {
-      if (cachedResult) {
-        return JSON.parse(cachedResult);
-      }
-      // if page 1 has no results, don't fetch remaining pages
-      const page1Result = await fetchPage(1);
-      if (!page1Result || page1Result.length === 0 || maxPages === 1) {
-        return [page1Result];
-      }
-      const remainingPages = await Promise.all(
-        Array.from({ length: maxPages - 1 }, (_, i) => fetchPage(i + 2)),
-      );
-      return [page1Result, ...remainingPages];
-    };
-
-    const [indexResults, searchResults] = await Promise.all([
-      queryIndex(url, limit, useIndex, includeSubdomains),
-      fetchAllPages(),
-    ]);
+    const indexResults = await queryIndex(url, limit, useIndex, includeSubdomains);
 
     if (!zeroDataRetention) {
       await redisEvictConnection.set(
         cacheKey,
-        JSON.stringify(searchResults),
+        JSON.stringify(indexResults),
         "EX",
         48 * 60 * 60,
       ); // Cache for 48 hours
@@ -273,33 +227,6 @@ export async function getMapResults({
       } catch (e) {
         // Silently handle sitemap errors
       }
-    }
-
-    if (search) {
-      mapResults = searchResults
-        .flat()
-        .map<MapDocument>(
-          x =>
-            ({
-              url: x.url,
-              title: x.title,
-              description: x.description,
-            }) satisfies MapDocument,
-        )
-        .concat(mapResults);
-    } else {
-      mapResults = mapResults.concat(
-        searchResults.flat().map(x => ({
-          url: x.url,
-          title: x.title,
-          description: x.description,
-        })),
-      );
-    }
-
-    const minimumCutoff = Math.min(MAX_MAP_LIMIT, limit);
-    if (mapResults.length > minimumCutoff) {
-      mapResults = mapResults.slice(0, minimumCutoff);
     }
 
     if (search) {
@@ -416,7 +343,7 @@ export async function buildPromptWithWebsiteStructure({
     return { prompt, websiteUrls };
   } catch (e) {
     logger.warn("Failed to get website structure for prompt enhancement", {
-      error: (e as any)?.message ?? e,
+      error: e instanceof Error ? e.message : e,
     });
     return { prompt: basePrompt, websiteUrls: [] };
   }

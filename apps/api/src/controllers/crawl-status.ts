@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Response } from "../lib/express-types";
 import {
   CrawlStatusParams,
   CrawlStatusResponse,
@@ -19,7 +19,7 @@ import {
 import { ScrapeJobSingleUrls } from "../types";
 import { redisEvictConnection } from "../services/redis";
 import { isBaseDomain, extractBaseDomain } from "../lib/url-utils";
-import { Request } from "express";
+import { Request } from "../lib/express-types";
 import { withErrorHandler } from "./error-wrapper";
 
 export type PseudoJob<T> = {

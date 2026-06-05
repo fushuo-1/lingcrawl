@@ -23,6 +23,22 @@ export type NuQJobStatus =
   | "completed"
   | "failed"
   | "backlog";
+
+export type NuQJobRow<JobData = any, JobReturnValue = any> = {
+  id: string;
+  status: string;
+  created_at: Date | string;
+  priority: number;
+  data: JobData;
+  finished_at: Date | string | null;
+  listen_channel_id: string | null;
+  returnvalue: JobReturnValue | null;
+  failedreason: string | null;
+  lock: string | null;
+  owner_id: string | null;
+  group_id: string | null;
+};
+
 export type NuQJob<Data = any, ReturnValue = any> = {
   id: string;
   status: NuQJobStatus;
@@ -419,13 +435,13 @@ class NuQ<JobData = any, JobReturnValue = any> {
   ];
 
   private rowToJob(
-    row: any,
+    row: NuQJobRow<JobData, JobReturnValue> | undefined,
     backlogged?: boolean,
   ): NuQJob<JobData, JobReturnValue> | null {
     if (!row) return null;
     return {
       id: row.id,
-      status: backlogged ? "backlog" : row.status,
+      status: backlogged ? "backlog" : (row.status as NuQJobStatus),
       createdAt: new Date(row.created_at),
       priority: row.priority,
       data: row.data,
@@ -784,7 +800,8 @@ class NuQ<JobData = any, JobReturnValue = any> {
         method: "nuqAddJob",
         duration,
         scrapeId: id,
-        zeroDataRetention: (data as any)?.zeroDataRetention ?? false,
+        zeroDataRetention:
+          (data as ScrapeJobData | undefined)?.zeroDataRetention ?? false,
       });
     }
   }
@@ -827,7 +844,8 @@ class NuQ<JobData = any, JobReturnValue = any> {
         method: "nuqAddJob",
         duration,
         scrapeId: id,
-        zeroDataRetention: (data as any)?.zeroDataRetention ?? false,
+        zeroDataRetention:
+          (data as ScrapeJobData | undefined)?.zeroDataRetention ?? false,
       });
     }
   }
@@ -880,7 +898,7 @@ class NuQ<JobData = any, JobReturnValue = any> {
 
           // Build the VALUES clause and parameters array
           const valuesPlaceholders: string[] = [];
-          const params: any[] = [];
+          const params: unknown[] = [];
 
           const columns = [
             "id",
@@ -1125,7 +1143,8 @@ class NuQ<JobData = any, JobReturnValue = any> {
           job,
           _logger.child({
             jobId: job.id,
-            zeroDataRetention: !!(job.data || ({} as any)).zeroDataRetention,
+            zeroDataRetention: !!(job.data as ScrapeJobData | undefined)
+              ?.zeroDataRetention,
           }),
         );
       }
@@ -1226,7 +1245,7 @@ class NuQ<JobData = any, JobReturnValue = any> {
   public async jobFinish(
     id: string,
     lock: string,
-    returnvalue: any | null,
+    returnvalue: JobReturnValue | null,
     _logger: Logger = logger,
   ): Promise<boolean> {
     const start = Date.now();
@@ -1376,6 +1395,15 @@ class NuQ<JobData = any, JobReturnValue = any> {
 
 export type NuQGroupStatus = "active" | "completed" | "cancelled";
 
+type NuQGroupRow = {
+  id: string;
+  status: string;
+  created_at: Date | string;
+  owner_id: string | null;
+  ttl: number;
+  expires_at: Date | string | null;
+};
+
 export type NuQJobGroupInstance = {
   id: string;
   status: NuQGroupStatus;
@@ -1397,13 +1425,15 @@ class NuQJobGroup {
     "expires_at",
   ];
 
-  private rowToGroup(row: any): NuQJobGroupInstance | null {
+  private rowToGroup(
+    row: NuQGroupRow | undefined,
+  ): NuQJobGroupInstance | null {
     if (!row) return null;
     return {
       id: row.id,
-      status: row.status,
+      status: row.status as NuQGroupStatus,
       createdAt: new Date(row.created_at),
-      ownerId: row.owner_id,
+      ownerId: row.owner_id ?? "",
       ttl: row.ttl,
       expiresAt: row.expires_at ? new Date(row.expires_at) : undefined,
     };

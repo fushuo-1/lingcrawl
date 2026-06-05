@@ -16,7 +16,6 @@ import {
 } from "../lib/crawl-redis";
 import { getJobs, PseudoJob } from "./crawl-status";
 import { scrapeQueue, NuQJobStatus } from "../services/worker/nuq";
-import { getErrorContactMessage } from "../lib/deployment";
 
 type ErrorMessage = {
   type: "error";
@@ -205,7 +204,7 @@ export async function crawlStatusWSController(
     );
     return close(ws, 1011, {
       type: "error",
-      error: getErrorContactMessage(id),
+      error: `An error occurred. Please check your logs for more details. Error ID: ${id}`,
     });
   }
 }

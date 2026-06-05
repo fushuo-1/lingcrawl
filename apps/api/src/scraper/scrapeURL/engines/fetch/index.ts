@@ -94,7 +94,7 @@ export async function scrapeURLWithFetch(
         error instanceof Error &&
         error.message === "fetch failed" &&
         error.cause &&
-        (error.cause as any).code === "CERT_HAS_EXPIRED"
+        (error.cause as { code?: string })?.code === "CERT_HAS_EXPIRED"
       ) {
         throw new SSLError(meta.options.skipTlsVerification);
       } else {
