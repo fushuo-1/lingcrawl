@@ -139,6 +139,10 @@ export interface WebSearchResult {
   description: string;
   position?: number;
   category?: string;
+  // Enrichment fields from search engine
+  source?: string;           // e.g. "Stack Overflow", "CSDN"
+  publishedDate?: string;    // ISO date string when available
+  engines?: string[];        // search engines that returned this result
   // Scraped content fields
   markdown?: string;
   html?: string;
@@ -151,10 +155,21 @@ export interface WebSearchResult {
 
 export type SearchResultType = "web" | "images" | "news";
 
+export type QueryType = "troubleshoot" | "comparison" | "factual" | "howto" | "news" | "research" | "general";
+
+export interface SearchQueryMeta {
+  originalQuery: string;
+  queryType: QueryType;
+  language: "zh" | "en" | "mixed";
+  engines: string;
+  timeRange?: string;
+}
+
 export interface SearchV2Response {
   web?: WebSearchResult[];
   images?: ImageSearchResult[];
   news?: NewsSearchResult[];
+  queryMeta?: SearchQueryMeta;
 }
 
 export interface ScrapeActionContent {

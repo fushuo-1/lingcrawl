@@ -4,6 +4,11 @@
  * query type classification, and engine routing.
  */
 
+import { QueryType } from "../lib/entities";
+
+// Re-export for consumers
+export type { QueryType };
+
 // ─── Language Detection ───
 
 export type QueryLanguage = "zh" | "en" | "mixed";
@@ -80,8 +85,6 @@ export function detectTimeRange(query: string): TimeRange {
 
 // ─── Query Type Detection ───
 
-export type QueryType = "troubleshoot" | "comparison" | "factual" | "general";
-
 export function detectQueryType(query: string): QueryType {
   if (
     /fix|error|issue|bug|problem|troubleshoot|debug|报错|解决|修复|排查|异常|失败|cannot|can't|unable/i.test(
@@ -95,6 +98,15 @@ export function detectQueryType(query: string): QueryType {
   }
   if (/what is|是什么|define|定义|概念|含义|meaning/i.test(query)) {
     return "factual";
+  }
+  if (/how to|how do|教程|指南|guide|tutorial|入门|实践|步骤|怎么做|如何做|怎么实现/i.test(query)) {
+    return "howto";
+  }
+  if (/新闻|news|最新报道|breaking|快讯|today's/i.test(query)) {
+    return "news";
+  }
+  if (/论文|paper|arxiv|研究|学术|scholar|doi|journal|conference/i.test(query)) {
+    return "research";
   }
   return "general";
 }
@@ -132,6 +144,20 @@ export function rewriteQuery(
       return `${query} ${TROUBLESHOOT_SITES}`;
     case "comparison":
       return `${query}${COMPARISON_SUFFIX}`;
+    case "howto":
+      return `${query} 教程 guide tutorial`;
+    case "news":
+      return `${query} 最新 news`;
+    case "research":
+      return `${query} paper research`;
+    case "factual": {
+      // For "what is X" / "X是什么" queries, add context terms to improve definition results
+      const hasDefPattern = /是什么|what is|define|定义/.test(query);
+      if (hasDefPattern) {
+        return `${query} 全称 介绍 概念`;
+      }
+      return query;
+    }
     default:
       return query;
   }
@@ -155,6 +181,41 @@ export function diversifyByDomain<T extends { url: string }>(
       return true;
     }
   });
+}
+
+// ─── Relevance Filtering ───
+
+export function filterByRelevance<T extends { title?: string; description?: string }>(
+  results: T[],
+  query: string,
+): T[] {
+  // Extract significant tokens: Chinese chars (2+), English words (2+), uppercase acronyms
+  const tokens: string[] = [];
+  // Chinese: split by non-CJK, keep segments >= 2 chars
+  const zhSegments = query.match(/[一-鿿]{2,}/g) || [];
+  tokens.push(...zhSegments);
+  // English words: 2+ chars, not stop words
+  const enWords = query.match(/[a-zA-Z]{2,}/g) || [];
+  for (const w of enWords) {
+    if (!EN_STOP_WORDS.has(w.toLowerCase())) {
+      tokens.push(w);
+    }
+  }
+  // Uppercase acronyms (e.g. RAG, LLM, MCP)
+  const acronyms = query.match(/[A-Z]{2,6}/g) || [];
+  tokens.push(...acronyms);
+
+  if (tokens.length === 0) return results;
+
+  const lowerTokens = tokens.map(t => t.toLowerCase());
+
+  const relevant = results.filter(r => {
+    const text = `${r.title || ""} ${r.description || ""}`.toLowerCase();
+    return lowerTokens.some(t => text.includes(t));
+  });
+
+  // Only filter if we have enough relevant results; keep originals if over-filtering
+  return relevant.length >= 2 ? relevant : results;
 }
 
 // ─── Pipeline Entry Point ───

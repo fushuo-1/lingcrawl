@@ -1,10 +1,11 @@
 import axios from "axios";
 import { config } from "../config";
-import { SearchV2Response, WebSearchResult } from "../lib/entities";
+import { SearchV2Response, WebSearchResult, SearchQueryMeta } from "../lib/entities";
 import { logger } from "../lib/logger";
 import {
   processQuery,
   diversifyByDomain,
+  filterByRelevance,
   type TimeRange,
 } from "./query-processor";
 
@@ -76,6 +77,9 @@ export async function searxng_search(
           url: a.url,
           title: a.title,
           description: a.content,
+          source: a.engine ?? (Array.isArray(a.engines) ? a.engines[0] : undefined),
+          publishedDate: a.publishedDate ?? undefined,
+          engines: Array.isArray(a.engines) ? a.engines : undefined,
         }));
     }
 
@@ -107,11 +111,23 @@ export async function searxng_search(
     // Deduplicate by domain for diversity
     webResults = diversifyByDomain(webResults, 3);
 
+    // Filter out results completely unrelated to the query
+    webResults = filterByRelevance(webResults, processed.originalQuery);
+
+    const queryMeta: SearchQueryMeta = {
+      originalQuery: processed.originalQuery,
+      queryType: processed.queryType,
+      language: processed.language,
+      engines: effectiveEngines,
+      timeRange: processed.timeRange,
+    };
+
     return webResults.length > 0
       ? {
           web: webResults.slice(0, requestedResults),
+          queryMeta,
         }
-      : {};
+      : { queryMeta };
   } catch (error) {
     logger.error(`There was an error searching for content`, { error });
     return {};
