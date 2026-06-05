@@ -52,3 +52,4 @@ apps/playwright-service-ts/package-lock.json
 llm-links.txt
 mapped-links.txt
 gke-key.json
+apps/api/dist/
