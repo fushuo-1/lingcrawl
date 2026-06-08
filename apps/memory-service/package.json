@@ -1,26 +1,38 @@
 {
   "name": "@lingcrawl/memory-service",
   "version": "0.1.0",
-  "description": "LingCrawl Memory Service — AI Agent long-term memory + conversation history search",
+  "description": "Memory Service — AI Agent long-term memory + session history retrieval",
   "type": "module",
-  "main": "dist/src/index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node dist/src/index.js",
+    "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "build": "tsc",
     "test": "jest",
     "test:unit": "jest \"src/__tests__/unit/.+\\.test\\.ts\""
   },
+  "license": "ISC",
   "dependencies": {
+    "@fastify/cors": "^10.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^11.3.0",
     "dotenv": "^16.3.1",
+    "fastify": "^5.0.0",
     "zod": "4.1.12"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.19.1",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.5",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3"
-  }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
+  },
+  "packageManager": "pnpm@10.16.1"
 }

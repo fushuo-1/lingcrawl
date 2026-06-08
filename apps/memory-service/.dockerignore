@@ -1,0 +1,8 @@
+**/node_modules/
+**/dist/
+**/target/
+**/__tests__/
+**/*.test.ts
+.env
+*.csv
+*.log
