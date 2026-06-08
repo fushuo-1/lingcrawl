@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import "dotenv/config";
 import { configDotenv } from "dotenv";
 import path from "path";
@@ -74,11 +73,3 @@ function parseConfig(env: NodeJS.ProcessEnv) {
 
 export const config = parseConfig(process.env);
 export type Config = z.infer<typeof configSchema>;
-=======
-// TODO(#68): replace with full Zod schema + env loading
-export const config = {
-  HOST: process.env.HOST ?? "127.0.0.1",
-  PORT: Number(process.env.PORT ?? 3001),
-  DATA_DIR: process.env.DATA_DIR ?? "~/.lingcrawl",
-} as const;
->>>>>>> feat/memory-service-scaffold
