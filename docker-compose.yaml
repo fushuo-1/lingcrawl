@@ -160,6 +160,34 @@ services:
         max-file: "3"
         compress: "true"
 
+  memory-service:
+    build: apps/memory-service
+    ports:
+      - "127.0.0.1:3001:3001"
+    networks:
+      - backend
+    environment:
+      HOST: 127.0.0.1
+      PORT: 3001
+      DATA_DIR: /data
+    volumes:
+      - lingcrawl_memory_data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+        compress: "true"
+
+volumes:
+  lingcrawl_memory_data:
+
 networks:
   backend:
     driver: bridge
