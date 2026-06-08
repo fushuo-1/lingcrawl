@@ -3,6 +3,10 @@ import { configDotenv } from "dotenv";
 import path from "path";
 import os from "os";
 import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Fallback: load .env from repo root when running from apps/memory-service/
 configDotenv({ path: path.resolve(__dirname, "..", "..", "..", ".env"), override: false });
