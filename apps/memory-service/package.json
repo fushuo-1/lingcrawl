@@ -4,18 +4,23 @@
   "description": "Memory Service — AI Agent long-term memory + session history retrieval",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "lingcrawl-memory": "dist/cli/index.js"
+  },
   "scripts": {
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "build": "tsc",
     "test": "jest",
-    "test:unit": "jest \"src/__tests__/unit/.+\\.test\\.ts\""
+    "test:unit": "jest \"src/__tests__/unit/.+\\.test\\.ts\"",
+    "cli": "tsx src/cli/index.ts"
   },
   "license": "ISC",
   "dependencies": {
     "@fastify/cors": "^10.0.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^11.3.0",
+    "commander": "^12.0.0",
     "dotenv": "^16.3.1",
     "fastify": "^5.0.0",
     "zod": "4.1.12"
