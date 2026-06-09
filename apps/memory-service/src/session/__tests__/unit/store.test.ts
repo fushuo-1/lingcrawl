@@ -642,3 +642,69 @@ describe("SessionStore.logExchange — atomicity", () => {
  }
  });
 });
+
+/* ----- search — smoke tests (the dedicated suite in search.test.ts is the
+ exhaustive coverage for issue #73) ----- */
+
+describe("SessionStore.search — smoke tests", () => {
+ let db: Database.Database;
+ let store: SessionStore;
+
+ beforeEach(() => {
+ ({ db, store } = openStore());
+ });
+
+ afterEach(() => {
+ if (db?.open) db.close();
+ });
+
+ it("finds an exchange whose assistant_message matches the keyword", () => {
+ store.logExchange({
+ sessionId: "s1",
+ userMessage: "how do I cache things?",
+ assistantMessage: "use redis for in-memory caching",
+ source: "cli",
+ });
+ store.logExchange({
+ sessionId: "s1",
+ userMessage: "what is a CDN?",
+ assistantMessage: "a globally distributed cache",
+ source: "cli",
+ });
+
+ const hits = store.search({ query: "redis" });
+ expect(hits).toHaveLength(1);
+ expect(hits[0].assistantMessage).toContain("redis");
+ expect(hits[0].userMessage).toContain("cache things");
+ });
+
+ it("returns no context by default and full context when requested", () => {
+ store.logExchange({
+ sessionId: "s1",
+ userMessage: "first",
+ assistantMessage: "first reply",
+ source: "cli",
+ });
+ store.logExchange({
+ sessionId: "s1",
+ userMessage: "what about redis?",
+ assistantMessage: "redis is a key-value store",
+ source: "cli",
+ });
+ store.logExchange({
+ sessionId: "s1",
+ userMessage: "last",
+ assistantMessage: "last reply",
+ source: "cli",
+ });
+
+ const bare = store.search({ query: "redis" });
+ expect(bare).toHaveLength(1);
+ expect(bare[0].context).toBeUndefined();
+
+ const withCtx = store.search({ query: "redis", includeContext: true });
+ expect(withCtx).toHaveLength(1);
+ expect(withCtx[0].context!.prev!.sequence).toBe(1);
+ expect(withCtx[0].context!.next!.sequence).toBe(3);
+ });
+});
