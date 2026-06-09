@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
-import { config } from "./config";
+import { config } from "./config.js";
 
 /**
  * Memory Service — AI Agent long-term memory + session history retrieval.

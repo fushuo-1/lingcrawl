@@ -29,12 +29,37 @@ export interface Usage {
 export interface AddResult {
   id: number;
   usage: Usage;
+  /** Set when the entry was a duplicate of an existing one; INSERT was skipped. */
+  noDuplicateAdded?: boolean;
+  /** When `noDuplicateAdded` is true, the id of the existing entry. */
+  existingId?: number;
 }
 
-/** The four-method CRUD surface that #69 ships. */
+/** Result of a successful `replace`. */
+export interface ReplaceResult {
+  id: number;
+  usage: Usage;
+}
+
+/** Result of a successful `remove`. */
+export interface RemoveResult {
+  success: true;
+  removedId: number;
+}
+
+/** The full CRUD surface (issues #69 + #70). */
 export interface MemoryStore {
   add(target: "memory" | "user", content: string): Promise<AddResult>;
   get(id: number): Promise<MemoryEntry | null>;
   list(target: "memory" | "user"): Promise<MemoryEntry[]>;
   getUsage(target: "memory" | "user"): Promise<Usage>;
+  replace(
+    target: "memory" | "user",
+    oldText: string,
+    content: string,
+  ): Promise<ReplaceResult>;
+  remove(
+    target: "memory" | "user",
+    oldText: string,
+  ): Promise<RemoveResult>;
 }
