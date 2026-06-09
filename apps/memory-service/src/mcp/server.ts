@@ -17,6 +17,7 @@ import type Database from "better-sqlite3";
 import { getDb } from "../db/client.js";
 import { MemoryStoreImpl } from "../memory/store.js";
 import { SessionStore } from "../session/store.js";
+import { registerMemoryResources } from "./resources.js";
 import { registerMemoryTools } from "./tools/memory.js";
 import { registerSessionTools } from "./tools/session.js";
 import { registerUserTools } from "./tools/user.js";
@@ -105,6 +106,7 @@ export function createMemoryMcpServer(
     store: sessionStore,
     getClientName: () => clientName,
   });
+  registerMemoryResources(server, { store: memoryStore });
 
   return {
     server,
