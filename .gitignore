@@ -39,7 +39,8 @@ CLAUDE.md
 CONTEXT.md
 CLAUDE.local.md
 docker-dist/
-docs/
+/docs/agents/
+/docs/claude-skills/
 .pdf
 
 # Go module cache
