@@ -5,7 +5,8 @@ import { registerMapTool } from "./tools/map.js";
 import { registerLinksTool } from "./tools/links.js";
 import { registerGithubReadTool } from "./tools/github-read.js";
 import { registerExtractTool } from "./tools/extract.js";
-import { registerReadPdfTool } from "./tools/read-pdf.js";
+import { registerUploadPdfTool } from "./tools/upload-pdf.js";
+import { registerPdfApiDocTool } from "./tools/pdf-api-doc.js";
 import { registerCrawlTool } from "./tools/crawl.js";
 import { registerBatchScrapeTool } from "./tools/batch-scrape.js";
 
@@ -24,7 +25,8 @@ export function createMcpServer(): McpServer {
   registerLinksTool(server);
   registerGithubReadTool(server);
   registerExtractTool(server);
-  registerReadPdfTool(server);
+  registerUploadPdfTool(server);
+  registerPdfApiDocTool(server);
   registerCrawlTool(server);
   registerBatchScrapeTool(server);
 

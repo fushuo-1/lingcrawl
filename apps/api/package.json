@@ -65,6 +65,7 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/formbody": "^8.0.0",
     "@fastify/websocket": "^11.0.0",
+    "@fastify/multipart": "^9.0.0",
     "axios": "^1.13.5",
     "cacheable-lookup": "^6.1.0",
     "cheerio": "^1.0.0-rc.12",

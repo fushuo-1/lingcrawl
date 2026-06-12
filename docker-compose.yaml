@@ -12,6 +12,10 @@ x-common-service: &common-service
       hard: 65535
   networks:
     - backend
+  dns:
+    - 223.5.5.5
+    - 114.114.114.114
+    - 8.8.8.8
   extra_hosts:
     - "host.docker.internal:host-gateway"
   logging:
@@ -43,6 +47,10 @@ services:
   playwright-service:
     build: apps/playwright-service-ts
     # image: ghcr.io/lingcrawl/playwright-service:latest
+    dns:
+      - 223.5.5.5
+      - 114.114.114.114
+      - 8.8.8.8
     environment:
       PORT: 3000
       PROXY_SERVER: ${PROXY_SERVER}
@@ -76,9 +84,8 @@ services:
       WORKER_PORT: ${WORKER_PORT:-3005}
       NUQ_RABBITMQ_URL: amqp://rabbitmq:5672
       ENV: local
-    dns:
-      - 223.5.5.5
-      - 114.114.114.114
+    volumes:
+      - D:/OneDrive/PDFS:/mnt/pdfs:ro
     depends_on:
       redis:
         condition: service_started
@@ -94,6 +101,8 @@ services:
     cpus: 4.0
     mem_limit: 8G
     memswap_limit: 8G
+    tmpfs:
+      - /tmp/pdf-upload:noexec,nosuid,size=500m
 
   searxng:
     image: searxng/searxng
@@ -132,10 +141,10 @@ services:
     command: rabbitmq-server
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     logging:
       driver: "json-file"
       options:

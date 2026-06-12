@@ -16,6 +16,7 @@ import { crawlStatusWSController } from "../controllers/crawl-status-ws";
 import { githubReadController } from "../controllers/github-read";
 import { linksController } from "../controllers/links";
 import { extractController } from "../controllers/extract";
+import { pdfUploadHandler } from "../controllers/pdf-upload";
 import {
   blocklistHook,
   idempotencyHook,
@@ -149,4 +150,9 @@ export default async function apiRoutes(fastify: FastifyInstance) {
 
   // Extract (dual mode: fulltext or LLM)
   fastify.post("/extract", adapt(extractController));
+
+  // PDF Upload (multipart file upload for LLM integration)
+  // Uses Fastify native handler directly (not adapt()) because @fastify/multipart
+  // provides req.file() which is incompatible with the Express request shim.
+  fastify.post("/pdf/upload", {}, pdfUploadHandler);
 }

@@ -4,6 +4,7 @@ import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import websocket from "@fastify/websocket";
+import multipart from "@fastify/multipart";
 
 import apiRouter from "./routes/api";
 import mcpRouter from "./mcp/transport";
@@ -120,9 +121,20 @@ async function startServer(port = DEFAULT_PORT) {
   await app.register(cors);
   await app.register(formbody);
   await app.register(websocket);
+  await app.register(multipart, {
+    limits: {
+      fileSize: 100 * 1024 * 1024, // 100MB
+      files: 1,
+    },
+  });
 
   await app.register(apiRouter, { prefix: "/api" });
-  await app.register(mcpRouter);
+  await app.register(
+    async function mcpScope(child) {
+      await child.register(mcpRouter);
+    },
+    { bodyLimit: 700 * 1024 * 1024 },
+  );
 
   try {
     await initializeBlocklist();

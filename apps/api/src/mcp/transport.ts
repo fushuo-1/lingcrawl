@@ -8,7 +8,7 @@ import { logger } from "../lib/logger";
  * Stateless mode: each request creates a fresh server + transport.
  */
 export default async function mcpRoutes(fastify: FastifyInstance) {
-  fastify.all("/mcp", async (request: FastifyRequest, reply: FastifyReply) => {
+  fastify.all("/mcp", { bodyLimit: 700 * 1024 * 1024 }, async (request: FastifyRequest, reply: FastifyReply) => {
     const mcpLogger = logger.child({ module: "mcp" });
 
     try {
