@@ -343,6 +343,43 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
         throw new PDFOCRRequiredError(pdfResult.pdfType);
       }
 
+      // In auto mode, trigger MinerU OCR for scanned/image-based PDFs.
+      if (
+        mode === "auto" &&
+        (pdfResult.pdfType === "Scanned" ||
+          pdfResult.pdfType === "ImageBased" ||
+          pdfResult.pdfType === "Mixed")
+      ) {
+        try {
+          const mineruResult = await parseWithMinerU(tempFilePath, {
+            isOcr: true,
+            pageRanges: pagesSpec,
+          });
+          result = {
+            html: "",
+            markdown: mineruResult.markdown,
+            tables: mineruResult.tables,
+          };
+        } catch (mineruError) {
+          if (
+            mineruError.code === "MINERU_TOKEN_MISSING" ||
+            mineruError.code === "MINERU_DISABLED"
+          ) {
+            logger.warn(
+              "MinerU unavailable for auto-mode OCR, falling back to pdfParse",
+              {
+                code: mineruError.code,
+                pdfType: pdfResult.pdfType,
+                url: meta.rewrittenUrl ?? meta.url,
+              },
+            );
+            // Continue to pdfParse fallback below
+          } else {
+            throw mineruError;
+          }
+        }
+      }
+
       if (eligible && pdfResult.markdown) {
         const html = await marked.parse(pdfResult.markdown, { async: true });
         result = { markdown: pdfResult.markdown, html };
