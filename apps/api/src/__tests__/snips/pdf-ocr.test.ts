@@ -1,11 +1,14 @@
 import { config } from "../../config";
-import { describeIf, itIf } from "../lib";
 import { parseWithMinerU } from "../../scraper/scrapeURL/engines/pdf/mineru";
 import { MinerUError } from "../../lib/error";
 import path from "node:path";
 import { existsSync } from "node:fs";
 
-// Conditionally run MinerU tests only when token is configured
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const describeIf = (cond: boolean) => (cond ? describe : describe.skip);
+const itIf = (cond: boolean) => (cond ? it : it.skip);
+
+// ── Setup ────────────────────────────────────────────────────────────────────
 const hasMinerUToken = !!config.MINERU_API_TOKEN;
 const scannedPdfPath = path.resolve(
   __dirname,
@@ -26,13 +29,12 @@ describe("PDF OCR via MinerU", () => {
 
           expect(result.markdown).toBeDefined();
           expect(result.markdown.length).toBeGreaterThan(0);
-          // Tables array should exist (even if empty)
           expect(Array.isArray(result.tables)).toBe(true);
         },
-        180_000, // MinerU can be slow
+        180_000,
       );
 
-      itIf(!!config.MINERU_API_TOKEN)(
+      it(
         "should pass pageRanges to MinerU when specified",
         async () => {
           const result = await parseWithMinerU(scannedPdfPath, {
@@ -50,7 +52,6 @@ describe("PDF OCR via MinerU", () => {
 
   describe("token/config missing (unit-level, no real API call)", () => {
     it("should throw MinerUError with MINERU_TOKEN_MISSING when token is not set", async () => {
-      // Temporarily override config
       const originalToken = config.MINERU_API_TOKEN;
       const originalEnabled = config.MINERU_OCR_ENABLED;
       try {
