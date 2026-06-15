@@ -49,12 +49,22 @@ interface PdfUploadBody {
   mode?: "fast" | "auto" | "ocr";
 }
 
+/** Extract a string value from a @fastify/multipart field (may be array or string) */
+function getFieldValue(fields: Record<string, unknown>, key: string): string | undefined {
+  const raw = fields[key];
+  if (Array.isArray(raw)) {
+    const item = raw[0] as Record<string, unknown> | undefined;
+    return typeof item?.value === "string" ? item.value : undefined;
+  }
+  return typeof raw === "string" ? raw : undefined;
+}
+
 function extractFields(fields: Record<string, unknown>): PdfUploadBody {
   return {
-    pages: typeof fields.pages === "string" ? fields.pages : undefined,
-    includeTables: typeof fields.includeTables === "string" || typeof fields.includeTables === "boolean" ? fields.includeTables : undefined,
-    includeImages: typeof fields.includeImages === "string" || typeof fields.includeImages === "boolean" ? fields.includeImages : undefined,
-    mode: (typeof fields.mode === "string" ? fields.mode : undefined) as "fast" | "auto" | "ocr" | undefined,
+    pages: getFieldValue(fields, "pages"),
+    includeTables: getFieldValue(fields, "includeTables") === "true" ? true : undefined,
+    includeImages: getFieldValue(fields, "includeImages") === "true" ? true : undefined,
+    mode: getFieldValue(fields, "mode") as "fast" | "auto" | "ocr" | undefined,
   };
 }
 
