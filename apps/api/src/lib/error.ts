@@ -24,7 +24,10 @@ export type ErrorCodes =
   | "SCRAPE_ACTIONS_NOT_SUPPORTED"
   | "CRAWL_DENIAL"
   | "BAD_REQUEST_INVALID_JSON"
-  | "BAD_REQUEST";
+  | "BAD_REQUEST"
+  | "MINERU_OCR_FAILED"
+  | "MINERU_TOKEN_MISSING"
+  | "MINERU_DISABLED";
 
 export class TransportableError extends Error {
   public readonly code: ErrorCodes;
@@ -216,5 +219,24 @@ export class JobCancelledError extends Error {
       "This scrape was not completed because the parent crawl or batch scrape was cancelled. This happens when you call the cancel endpoint on a crawl or batch scrape, or when the operation is stopped for another reason. Any URLs that were already scraped before cancellation are still available in the results.",
     );
     this.name = "JobCancelledError";
+  }
+}
+
+export class MinerUError extends TransportableError {
+  constructor(code: ErrorCodes, message: string) {
+    super(code, message);
+  }
+
+  serialize() {
+    return super.serialize();
+  }
+
+  static deserialize(
+    code: ErrorCodes,
+    data: ReturnType<typeof this.prototype.serialize>,
+  ) {
+    const x = new MinerUError(code, data.message);
+    x.stack = data.stack;
+    return x;
   }
 }

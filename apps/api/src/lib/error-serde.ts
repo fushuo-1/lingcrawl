@@ -3,6 +3,7 @@ import {
   CrawlDenialError,
   ErrorCodes,
   MapTimeoutError,
+  MinerUError,
   RacedRedirectError,
   ScrapeJobTimeoutError,
   SitemapError,
@@ -59,6 +60,11 @@ const errorMap: Record<ErrorCodes, any> = {
   // Zod errors
   BAD_REQUEST: null,
   BAD_REQUEST_INVALID_JSON: null,
+
+  // MinerU errors
+  MINERU_OCR_FAILED: MinerUError,
+  MINERU_TOKEN_MISSING: MinerUError,
+  MINERU_DISABLED: MinerUError,
 };
 
 export function serializeTransportableError(error: TransportableError) {

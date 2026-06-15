@@ -69,6 +69,14 @@ const configSchema = z.object({
   // GitHub
   GITHUB_TOKEN: z.string().optional(),
 
+  // MinerU OCR
+  MINERU_API_TOKEN: z.string().optional(),
+  MINERU_API_URL: z.string().default("https://mineru.net/api/v4"),
+  MINERU_OCR_TIMEOUT: z.coerce.number().default(120000),
+  MINERU_OCR_ENABLED: z.coerce.boolean().default(true),
+  MINERU_MODEL_VERSION: z.enum(["pipeline", "vlm"]).default("vlm"),
+  MINERU_LANGUAGE: z.string().default("ch"),
+
   // LingCrawl Features
   LINGCRAWL_LOG_TO_FILE: z.stringbool().optional(),
   FORCED_ENGINE_DOMAINS: z.string().optional(),
