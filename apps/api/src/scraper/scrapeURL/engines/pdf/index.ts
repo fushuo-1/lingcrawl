@@ -29,6 +29,7 @@ import { emitNativeLogs, extractAndEmitNativeLogs } from "../../../../lib/native
 import { scrapePDFWithParsePDF } from "./pdfParse";
 import { isPdfBuffer, PDF_SNIFF_WINDOW } from "./pdfUtils";
 import { extractWithPdfjs } from "./pdfjsExtract";
+import { parseWithMinerU } from "./mineru";
 
 /** Check if the PDF is eligible for Rust extraction, returning a rejection reason or null. */
 function getIneligibleReason(
@@ -121,6 +122,26 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
     await writeFile(tmpPath, buffer);
 
     try {
+      // --- MinerU OCR branch: force MinerU when mode="ocr" ---
+      if (mode === "ocr") {
+        const mineruResult = await parseWithMinerU(tmpPath, {
+          isOcr: true,
+          pageRanges: pagesSpec,
+        });
+        const html = mineruResult.markdown
+          ? await marked.parse(mineruResult.markdown, { async: true })
+          : "";
+        return {
+          url: targetUrl,
+          statusCode: 200,
+          html,
+          markdown: mineruResult.markdown,
+          pdfMetadata: { numPages: 0 },
+          pdfTables: mineruResult.tables,
+          proxyUsed: "basic",
+        };
+      }
+
       let result: PDFProcessorResult | null = null;
 
       // Try Rust extraction first
@@ -248,6 +269,26 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
       } else {
         throw new PDFPrefetchFailed();
       }
+    }
+
+    // --- MinerU OCR branch: force MinerU when mode="ocr" ---
+    if (mode === "ocr") {
+      const mineruResult = await parseWithMinerU(tempFilePath, {
+        isOcr: true,
+        pageRanges: pagesSpec,
+      });
+      const html = mineruResult.markdown
+        ? await marked.parse(mineruResult.markdown, { async: true })
+        : "";
+      return {
+        url: response.url ?? meta.rewrittenUrl ?? meta.url,
+        statusCode: response.status,
+        html,
+        markdown: mineruResult.markdown,
+        pdfMetadata: { numPages: 0 },
+        pdfTables: mineruResult.tables,
+        proxyUsed: "basic",
+      };
     }
 
     let result: PDFProcessorResult | null = null;
