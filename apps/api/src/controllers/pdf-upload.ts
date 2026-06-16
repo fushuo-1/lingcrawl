@@ -84,55 +84,59 @@ export async function pdfUploadHandler(
   logger.debug("PDF Upload " + jobId + " starting");
 
   // Parse multipart form data using @fastify/multipart
-  const file = await request.file();
-  if (!file) {
+  // Use request.parts() to iterate ALL parts (file + non-file fields)
+  const parts = request.parts();
+  let fileBuffer: Buffer | null = null;
+  let fileMimetype = "";
+  const formFields: Record<string, string> = {};
+
+  for await (const part of parts) {
+    if (part.file) {
+      // This is a file field
+      const chunks: Buffer[] = [];
+      for await (const chunk of part.file) {
+        chunks.push(chunk);
+      }
+      fileBuffer = Buffer.concat(chunks);
+      fileMimetype = part.mimetype;
+    } else {
+      // This is a non-file field (mode, pages, etc.)
+      const chunks: Buffer[] = [];
+      for await (const chunk of part.file) {
+        chunks.push(chunk);
+      }
+      formFields[part.fieldname] = Buffer.concat(chunks).toString("utf-8");
+    }
+  }
+
+  if (!fileBuffer) {
     return reply.code(400).send({
       success: false,
       error: "No file uploaded",
     });
   }
 
-  // Extract form fields from the multipart request
-  // @fastify/multipart file() returns { file, fields, ... }
-  // fields contains non-file form fields
-  const formFields = (file as any).fields || {};
-  // Also try request.body for non-file fields (mode, pages, etc.)
-  const body = (request.body as Record<string, unknown>) || {};
-  console.log("[DEBUG] formFields keys:", Object.keys(formFields), "body keys:", Object.keys(body));
   const options: PdfUploadBody = {
-    pages: (body.pages as string) || getFieldValue(formFields, "pages"),
-    includeTables: body.includeTables === "true" || body.includeTables === true ? true : undefined,
-    includeImages: body.includeImages === "true" || body.includeImages === true ? true : undefined,
-    mode: (body.mode as "fast" | "auto" | "ocr") || getFieldValue(formFields, "mode") as any,
+    pages: formFields.pages || undefined,
+    includeTables: formFields.includeTables === "true" ? true : undefined,
+    includeImages: formFields.includeImages === "true" ? true : undefined,
+    mode: (formFields.mode as "fast" | "auto" | "ocr") || undefined,
   };
-  console.log("[DEBUG] extracted options:", JSON.stringify(options));
 
   // Validate PDF file type by MIME type or magic bytes
-  if (file.mimetype && file.mimetype !== "application/pdf") {
+  if (fileMimetype && fileMimetype !== "application/pdf") {
     // Check magic bytes as fallback
-    const chunks: Buffer[] = [];
-    for await (const chunk of file.file) {
-      chunks.push(chunk);
-    }
-    const buffer = Buffer.concat(chunks);
-    if (buffer.length < 4 || buffer.toString("ascii", 0, 4) !== "%PDF") {
+    if (fileBuffer.length < 4 || fileBuffer.toString("ascii", 0, 4) !== "%PDF") {
       return reply.code(400).send({
         success: false,
         error: "Uploaded file is not a valid PDF",
       });
     }
     // Continue processing with this buffer
-    return await processPdfBuffer(buffer, options, logger, controllerStartTime, reply);
+    return await processPdfBuffer(fileBuffer, options, logger, controllerStartTime, reply);
   }
 
-  // Read file into buffer
-  const chunks: Buffer[] = [];
-  for await (const chunk of file.file) {
-    chunks.push(chunk);
-  }
-  const buffer = Buffer.concat(chunks);
-
-  return await processPdfBuffer(buffer, options, logger, controllerStartTime, reply);
+  return await processPdfBuffer(fileBuffer, options, logger, controllerStartTime, reply);
 }
 
 async function processPdfBuffer(
