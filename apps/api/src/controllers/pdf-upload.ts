@@ -96,6 +96,9 @@ export async function pdfUploadHandler(
   // @fastify/multipart file() returns { file, fields, ... }
   // fields contains non-file form fields
   const formFields = (file as any).fields || {};
+  console.log("[DEBUG] formFields keys:", Object.keys(formFields), "mode raw:", JSON.stringify(formFields.mode));
+  const options = extractFields(formFields);
+  console.log("[DEBUG] extracted options:", JSON.stringify(options));
 
   // Validate PDF file type by MIME type or magic bytes
   if (file.mimetype && file.mimetype !== "application/pdf") {
@@ -112,7 +115,7 @@ export async function pdfUploadHandler(
       });
     }
     // Continue processing with this buffer
-    return await processPdfBuffer(buffer, extractFields(formFields), logger, controllerStartTime, reply);
+    return await processPdfBuffer(buffer, options, logger, controllerStartTime, reply);
   }
 
   // Read file into buffer
@@ -122,7 +125,7 @@ export async function pdfUploadHandler(
   }
   const buffer = Buffer.concat(chunks);
 
-  return await processPdfBuffer(buffer, extractFields(formFields), logger, controllerStartTime, reply);
+  return await processPdfBuffer(buffer, options, logger, controllerStartTime, reply);
 }
 
 async function processPdfBuffer(
