@@ -92,8 +92,18 @@ export async function parseWithMinerU(
 
   const submitData = (await submitRes.json()) as {
     code: number;
+    msg?: string;
     data: { batch_id: string; file_urls: string[] };
   };
+
+  console.log("[MINERU] submit response:", JSON.stringify(submitData));
+
+  if (submitData.code !== 0 || !submitData.data) {
+    throw new MinerUError(
+      "MINERU_OCR_FAILED",
+      `MinerU submit error (code=${submitData.code}): ${submitData.msg || "unknown"}`,
+    );
+  }
 
   const { batch_id, file_urls } = submitData.data;
 
