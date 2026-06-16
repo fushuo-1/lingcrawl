@@ -91,21 +91,17 @@ export async function pdfUploadHandler(
   const formFields: Record<string, string> = {};
 
   for await (const part of parts) {
-    if (part.file) {
+    if (part.type === "file") {
       // This is a file field
       const chunks: Buffer[] = [];
-      for await (const chunk of part.file) {
+      for await (const chunk of (part as any).file) {
         chunks.push(chunk);
       }
       fileBuffer = Buffer.concat(chunks);
       fileMimetype = part.mimetype;
     } else {
       // This is a non-file field (mode, pages, etc.)
-      const chunks: Buffer[] = [];
-      for await (const chunk of part.file) {
-        chunks.push(chunk);
-      }
-      formFields[part.fieldname] = Buffer.concat(chunks).toString("utf-8");
+      formFields[part.fieldname] = (part as any).value ?? "";
     }
   }
 
