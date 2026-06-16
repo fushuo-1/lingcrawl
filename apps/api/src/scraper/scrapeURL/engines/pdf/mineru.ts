@@ -60,8 +60,11 @@ export async function parseWithMinerU(
   };
 
   // 1. Request signed upload URL
+  // Ensure filename ends with .pdf (temp files may have .pdf.tmp.xxx extension)
+  const baseName = path.basename(filePath);
+  const fileName = baseName.endsWith(".pdf") ? baseName : baseName.replace(/\.tmp\..*$/, "") || "document.pdf";
   const fileEntry: Record<string, unknown> = {
-    name: path.basename(filePath),
+    name: fileName,
   };
   if (options.pageRanges) {
     fileEntry.page_ranges = options.pageRanges;
