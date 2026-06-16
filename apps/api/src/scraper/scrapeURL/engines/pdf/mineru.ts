@@ -133,7 +133,12 @@ export async function parseWithMinerU(
   );
 
   // 4. Download and extract zip
-  const zipRes = await fetch(fullZipUrl);
+  // Replace CDN domain with OSS domain (Docker bridge network can't reach CDN via HTTPS)
+  const downloadUrl = fullZipUrl.replace(
+    "cdn-mineru.openxlab.org.cn",
+    "mineru.oss-cn-shanghai.aliyuncs.com",
+  );
+  const zipRes = await fetch(downloadUrl);
   if (!zipRes.ok) {
     throw new MinerUError(
       "MINERU_OCR_FAILED",
