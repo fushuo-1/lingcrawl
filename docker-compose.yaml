@@ -42,6 +42,12 @@ x-common-env: &common-env
   SEARXNG_ENDPOINT: ${SEARXNG_ENDPOINT}
   SEARXNG_ENGINES: ${SEARXNG_ENGINES}
   SEARXNG_CATEGORIES: ${SEARXNG_CATEGORIES}
+  MINERU_API_TOKEN: ${MINERU_API_TOKEN}
+  MINERU_API_URL: ${MINERU_API_URL:-https://mineru.net/api/v4}
+  MINERU_MODEL_VERSION: ${MINERU_MODEL_VERSION:-vlm}
+  MINERU_LANGUAGE: ${MINERU_LANGUAGE:-ch}
+  MINERU_OCR_TIMEOUT: ${MINERU_OCR_TIMEOUT:-120000}
+  MINERU_OCR_ENABLED: ${MINERU_OCR_ENABLED:-true}
 
 services:
   playwright-service:
@@ -76,6 +82,9 @@ services:
 
   api:
     <<: *common-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "cdn-mineru.openxlab.org.cn:host-gateway"
     environment:
       <<: *common-env
       HOST: "0.0.0.0"
