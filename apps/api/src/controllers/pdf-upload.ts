@@ -96,8 +96,15 @@ export async function pdfUploadHandler(
   // @fastify/multipart file() returns { file, fields, ... }
   // fields contains non-file form fields
   const formFields = (file as any).fields || {};
-  console.log("[DEBUG] formFields keys:", Object.keys(formFields), "mode raw:", JSON.stringify(formFields.mode));
-  const options = extractFields(formFields);
+  // Also try request.body for non-file fields (mode, pages, etc.)
+  const body = (request.body as Record<string, unknown>) || {};
+  console.log("[DEBUG] formFields keys:", Object.keys(formFields), "body keys:", Object.keys(body));
+  const options: PdfUploadBody = {
+    pages: (body.pages as string) || getFieldValue(formFields, "pages"),
+    includeTables: body.includeTables === "true" || body.includeTables === true ? true : undefined,
+    includeImages: body.includeImages === "true" || body.includeImages === true ? true : undefined,
+    mode: (body.mode as "fast" | "auto" | "ocr") || getFieldValue(formFields, "mode") as any,
+  };
   console.log("[DEBUG] extracted options:", JSON.stringify(options));
 
   // Validate PDF file type by MIME type or magic bytes
