@@ -14,6 +14,7 @@ import {
   FeatureFlag,
   getEngineMaxReasonableTime,
   scrapeURLWithEngine,
+  wouldHaveEngine,
 } from "./engines";
 import { htmlTransform } from "./lib/removeUnwantedElements";
 import { ZDRViolationError, NoEnginesLeftError, SiteError, SSLError, ActionError, UnsupportedFileError, PDFAntibotError, PDFOCRRequiredError, PDFInsufficientTimeError, DocumentAntibotError, DNSResolutionError, NoCachedDataError, ProxySelectionError } from "./error";
@@ -125,17 +126,31 @@ export async function scrapeURLLoopIter(
       meta.options.proxy === "auto" &&
       !meta.featureFlags.has("stealthProxy")
     ) {
-      meta.logger.info(
-        "Scrape via " +
-          engine +
-          " deemed unsuccessful due to proxy inadequacy. Adding stealthProxy flag.",
-        {
-          factors: { isLongEnough, isGoodStatusCode, hasNoPageError },
-          statusCode: engineResult.statusCode,
-          length: engineResult.html?.trim().length ?? 0,
-        },
-      );
-      throw new AddFeatureError(["stealthProxy"]);
+      // Check if adding stealthProxy would leave at least one usable engine
+      const testFlags = new Set(meta.featureFlags);
+      testFlags.add("stealthProxy");
+
+      if (wouldHaveEngine(testFlags)) {
+        meta.logger.info(
+          "Scrape via " +
+            engine +
+            " deemed unsuccessful due to proxy inadequacy. Adding stealthProxy flag.",
+          {
+            factors: { isLongEnough, isGoodStatusCode, hasNoPageError },
+            statusCode: engineResult.statusCode,
+            length: engineResult.html?.trim().length ?? 0,
+          },
+        );
+        throw new AddFeatureError(["stealthProxy"]);
+      } else {
+        meta.logger.info(
+          "Scrape via " +
+            engine +
+            " got " +
+            engineResult.statusCode +
+            " but no stealth-capable engine available. Passing to postprocessor.",
+        );
+      }
     }
 
     // NOTE: TODO: what to do when status code is bad is tough...

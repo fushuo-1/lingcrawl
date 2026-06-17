@@ -36,8 +36,9 @@ async function buildServer(): Promise<FastifyInstance> {
   getDb();
 
   // Build the MCP server and mount it.
-  const mcp = createMemoryMcpServer();
-  mountMcpHttpTransport(app, { server: mcp.server });
+  // (Each HTTP request creates a fresh McpServer + transport pair — stateless mode)
+  createMemoryMcpServer(); // touch DB / validate config at boot
+  mountMcpHttpTransport(app);
 
   return app;
 }
@@ -63,7 +64,8 @@ async function start(): Promise<void> {
   process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
-if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}`) {
+// Always start when this is the main entry point (works for both ESM and CJS)
+if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, "/")}` || process.argv[1]?.includes("index")) {
   void start();
 }
 

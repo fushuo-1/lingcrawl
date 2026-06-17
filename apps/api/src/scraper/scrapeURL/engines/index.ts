@@ -42,6 +42,31 @@ export function registerEngine(desc: EngineDescriptor): void {
   registry.set(desc.name, desc);
 }
 
+/**
+ * Check if adding the given feature flags would leave at least one usable engine.
+ * Used by the waterfall to avoid adding flags that filter out all engines.
+ */
+export function wouldHaveEngine(flags: Set<FeatureFlag>): boolean {
+  const prioritySum = [...flags].reduce(
+    (a, x) => a + featureFlagOptions[x].priority,
+    0,
+  );
+  const threshold = Math.floor(prioritySum / 2);
+  let hasPositiveQuality = false;
+  for (const [, desc] of registry) {
+    if (desc.quality > 0) hasPositiveQuality = true;
+  }
+  for (const [, desc] of registry) {
+    if (hasPositiveQuality && desc.quality <= 0) continue;
+    const score = [...flags].reduce(
+      (a, f) => a + (desc.features[f] ? featureFlagOptions[f].priority : 0),
+      0,
+    );
+    if (score >= threshold) return true;
+  }
+  return false;
+}
+
 const featureFlagOptions: {
   [F in FeatureFlag]: {
     priority: number;

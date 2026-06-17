@@ -8,35 +8,27 @@
  *
  * Pattern follows `apps/api/src/mcp/transport.ts` (the main LingCrawl
  * app's MCP mount) but adapted to Fastify instead of Express.
+ *
+ * Each request creates a fresh McpServer + transport pair (stateless
+ * mode) to avoid the "already connected" error from the shared McpServer
+ * singleton.
  */
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createMemoryMcpServer } from "./server.js";
 
 export interface MountMcpOptions {
-  /** The McpServer instance to expose over HTTP. */
-  server: McpServer;
   /** Path to mount on (default `/mcp`). */
   path?: string;
 }
 
-/**
- * Wire the MCP server onto the given Fastify app at `{path}`.
- *
- * One transport per HTTP request — matches the stateless / non-session
- * mode used by `apps/api`'s MCP mount. A new transport is created for
- * each incoming request; the underlying McpServer is shared.
- */
 export function mountMcpHttpTransport(
   app: FastifyInstance,
-  opts: MountMcpOptions,
+  opts: MountMcpOptions = {},
 ): void {
   const path = opts.path ?? "/mcp";
 
   app.all(path, async (request: FastifyRequest, reply: FastifyReply) => {
-    // The SDK reads from req-like and writes to res-like. We hand it
-    // a Node IncomingMessage-compatible facade backed by Fastify's raw
-    // request, and write the SDK's response back through reply.raw.
     const req = request.raw;
     const res = reply.raw;
 
@@ -47,15 +39,24 @@ export function mountMcpHttpTransport(
     }
     (req as unknown as { headers: typeof headers }).headers = headers;
 
+    // Create a fresh McpServer + transport per request
+    const mcp = createMemoryMcpServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // stateless mode
     });
 
     try {
-      await opts.server.connect(transport);
+      await mcp.server.connect(transport);
       await transport.handleRequest(req, res, request.body);
+      reply.hijack();
+      // Clean up after response
+      reply.raw.on("close", () => {
+        transport.close().catch(() => {});
+        mcp.server.close().catch(() => {});
+      });
     } catch (err) {
-      app.log.error({ err }, "MCP transport error");
+      const msg = err instanceof Error ? err.message : String(err);
+      app.log.error({ err: { message: msg } }, "MCP transport error");
       if (!reply.sent) {
         reply.code(500).send({ error: "mcp-transport-failed" });
       }

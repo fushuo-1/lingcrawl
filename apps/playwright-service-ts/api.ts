@@ -155,6 +155,7 @@ class Semaphore {
 const pageSemaphore = new Semaphore(MAX_CONCURRENT_PAGES);
 
 // --- Stealth: anti-detection scripts injected before every page ---
+// Enhanced stealth to bypass advanced anti-bot detection (e.g. Zhihu, Cloudflare)
 const STEALTH_INIT_SCRIPT = `
   // Hide webdriver flag
   Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
@@ -184,11 +185,111 @@ const STEALTH_INIT_SCRIPT = `
   Object.defineProperty(navigator, 'languages', {
     get: () => ['zh-CN', 'zh', 'en-US', 'en'],
   });
+
+  // Hide automation-related properties
+  delete navigator.__proto__.webdriver;
+
+  // Override navigator.deviceMemory to look like a real desktop
+  Object.defineProperty(navigator, 'deviceMemory', {
+    get: () => 8,
+  });
+
+  // Override navigator.hardwareConcurrency
+  Object.defineProperty(navigator, 'hardwareConcurrency', {
+    get: () => 8,
+  });
+
+  // Ensure Notification.permission looks real
+  if (window.Notification && !window.Notification.permission) {
+    Object.defineProperty(window.Notification, 'permission', {
+      get: () => 'default',
+    });
+  }
+
+  // Override maxTouchPoints to look like a desktop
+  Object.defineProperty(navigator, 'maxTouchPoints', {
+    get: () => 0,
+  });
+
+  // Override screen properties to look like a real monitor
+  Object.defineProperty(screen, 'width', { get: () => 1920 });
+  Object.defineProperty(screen, 'height', { get: () => 1080 });
+  Object.defineProperty(screen, 'availWidth', { get: () => 1920 });
+  Object.defineProperty(screen, 'availHeight', { get: () => 1040 });
+  Object.defineProperty(screen, 'colorDepth', { get: () => 24 });
+  Object.defineProperty(screen, 'pixelDepth', { get: () => 24 });
+
+  // Override window.outerWidth/Height
+  Object.defineProperty(window, 'outerWidth', { get: () => 1920 });
+  Object.defineProperty(window, 'outerHeight', { get: () => 1080 });
+  Object.defineProperty(window, 'innerWidth', { get: () => 1280 });
+  Object.defineProperty(window, 'innerHeight', { get: () => 800 });
+
+  // Override window.devicePixelRatio
+  Object.defineProperty(window, 'devicePixelRatio', { get: () => 1 });
+
+  // Fake WebGL vendor and renderer to look like a real GPU
+  const getParameter = WebGLRenderingContext.prototype.getParameter;
+  WebGLRenderingContext.prototype.getParameter = function(parameter) {
+    if (parameter === 37445) {
+      return 'Intel Inc.';
+    }
+    if (parameter === 37446) {
+      return 'Intel Iris Xe Graphics';
+    }
+    return getParameter.call(this, parameter);
+  };
+
+  // Override Canvas 2D getContext to add noise (anti-fingerprinting)
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+    const context = originalGetContext.call(this, type, ...args);
+    if (context && (type === '2d' || type === 'webgl' || type === 'webgl2')) {
+      // Add subtle noise to canvas operations to prevent fingerprinting
+      const originalToDataURL = this.toDataURL;
+      this.toDataURL = function(...toDataURLArgs) {
+        return originalToDataURL.apply(this, toDataURLArgs);
+      };
+    }
+    return context;
+  };
+
+  // Override navigator.connection to look like a real network
+  if (navigator.connection) {
+    Object.defineProperty(navigator.connection, 'effectiveType', { get: () => '4g' });
+    Object.defineProperty(navigator.connection, 'rtt', { get: () => 50 });
+    Object.defineProperty(navigator.connection, 'downlink', { get: () => 10 });
+  }
+
+  // Ensure window.opener is null (not set by automation)
+  Object.defineProperty(window, 'opener', { get: () => null });
+
+  // Override window.chrome.loadTimes to return realistic data
+  if (window.chrome && window.chrome.loadTimes) {
+    const originalLoadTimes = window.chrome.loadTimes;
+    window.chrome.loadTimes = function() {
+      const result = originalLoadTimes.call(this);
+      if (result) {
+        return result;
+      }
+      return {
+        connectionInfo: 'h2',
+        npnNegotiatedProtocol: 'h2',
+        navigationType: 'Other',
+        wasFetchedViaSpdy: true,
+        wasNpnNegotiated: true,
+      };
+    };
+  }
 `;
 
 // Real Chrome UA (stable channel, kept up-to-date)
 const CHROME_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36";
+
+// Mobile User-Agent for sites with weaker mobile anti-bot
+const MOBILE_USER_AGENT =
+  "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36";
 
 const AD_SERVING_DOMAINS = [
   'doubleclick.net',
@@ -213,6 +314,7 @@ interface UrlModel {
   headers?: { [key: string]: string };
   check_selector?: string;
   skip_tls_verification?: boolean;
+  mobile?: boolean;
 }
 
 let browser: Browser;
@@ -227,19 +329,27 @@ const initializeBrowser = async () => {
       '--disable-accelerated-2d-canvas',
       '--no-first-run',
       '--no-zygote',
-      '--disable-gpu'
+      '--disable-gpu',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-site-isolation-trials',
+      '--disable-web-security',
+      '--disable-features=ChromeWhatsNewUI',
+      '--no-default-browser-check',
+      '--disable-component-update',
+      '--disable-background-networking',
     ]
   });
 };
 
-const createContext = async (skipTlsVerification: boolean = false): Promise<{ context: BrowserContext; securityState: ContextSecurityState }> => {
-  const viewport = { width: 1280, height: 800 };
+const createContext = async (skipTlsVerification: boolean = false, mobile: boolean = false): Promise<{ context: BrowserContext; securityState: ContextSecurityState }> => {
+  const viewport = mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 };
   const securityState: ContextSecurityState = {
     blockedNavigationRequestUrl: null,
   };
 
   const contextOptions: any = {
-    userAgent: CHROME_USER_AGENT,
+    userAgent: mobile ? MOBILE_USER_AGENT : CHROME_USER_AGENT,
     viewport,
     ignoreHTTPSErrors: skipTlsVerification,
     locale: 'zh-CN',
@@ -335,6 +445,15 @@ const scrapePage = async (
     throw error;
   }
 
+  // Wait for any redirects to settle (anti-bot pages often redirect)
+  await page.waitForTimeout(2000);
+
+  // Re-check the current URL after potential redirects
+  const currentUrl = page.url();
+  if (currentUrl !== url && (currentUrl.includes('signin') || currentUrl.includes('login') || currentUrl.includes('captcha'))) {
+    console.warn(`⚠️ Redirected to auth/captcha page: ${currentUrl}`);
+  }
+
   if (waitAfterLoad > 0) {
     await page.waitForTimeout(waitAfterLoad);
   }
@@ -348,9 +467,23 @@ const scrapePage = async (
   }
 
   // Detect PDF.js viewer and extract text from rendered pages
-  const isPdfJs = await page.evaluate(() =>
-    !!document.querySelector('.pdfViewer') || !!document.querySelector('#viewer.pdfViewer')
-  );
+  let isPdfJs = false;
+  try {
+    isPdfJs = await page.evaluate(() =>
+      !!document.querySelector('.pdfViewer') || !!document.querySelector('#viewer.pdfViewer')
+    );
+  } catch (e) {
+    console.warn('page.evaluate failed for PDF detection, retrying...', e);
+    // Wait a bit more and retry
+    await page.waitForTimeout(1000);
+    try {
+      isPdfJs = await page.evaluate(() =>
+        !!document.querySelector('.pdfViewer') || !!document.querySelector('#viewer.pdfViewer')
+      );
+    } catch (e2) {
+      console.warn('PDF detection retry failed:', e2);
+    }
+  }
 
   let headers = null, content: string;
   let ct: string | undefined = undefined;
@@ -461,7 +594,7 @@ app.get('/health', async (req: Request, res: Response) => {
 });
 
 app.post('/scrape', async (req: Request, res: Response) => {
-  const { url, wait_after_load = 0, timeout = 15000, headers, check_selector, skip_tls_verification = false }: UrlModel = req.body;
+  const { url, wait_after_load = 0, timeout = 15000, headers, check_selector, skip_tls_verification = false, mobile = false }: UrlModel = req.body;
 
   console.log(`================= Scrape Request =================`);
   console.log(`URL: ${url}`);
@@ -470,6 +603,7 @@ app.post('/scrape', async (req: Request, res: Response) => {
   console.log(`Headers: ${headers ? JSON.stringify(headers) : 'None'}`);
   console.log(`Check Selector: ${check_selector ? check_selector : 'None'}`);
   console.log(`Skip TLS Verification: ${skip_tls_verification}`);
+  console.log(`Mobile Mode: ${mobile}`);
   console.log(`==================================================`);
 
   if (!url) {
@@ -508,7 +642,7 @@ app.post('/scrape', async (req: Request, res: Response) => {
   let page: Page | null = null;
 
   try {
-    const contextBundle = await createContext(skip_tls_verification);
+    const contextBundle = await createContext(skip_tls_verification, mobile);
     requestContext = contextBundle.context;
     securityState = contextBundle.securityState;
     page = await requestContext.newPage();

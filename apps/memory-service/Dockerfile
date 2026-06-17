@@ -49,7 +49,8 @@ WORKDIR /app
 
 # better-sqlite3 ships a prebuilt binary for linux-x64 / glibc — works on bookworm-slim
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
+COPY --from=build /app/dist/src ./dist
+COPY --from=build /app/src/db/schema.sql ./dist/db/schema.sql
 COPY --from=build /app/package.json ./package.json
 
 ENV NODE_ENV=production

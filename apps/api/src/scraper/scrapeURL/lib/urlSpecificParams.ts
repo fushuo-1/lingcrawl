@@ -40,4 +40,27 @@ export const urlSpecificParams: Record<string, UrlSpecificParams> = {
     scrapeOptions: {},
     internalOptions: { forceEngine: "fire-engine;tlsclient" },
   },
+  // Zhihu (知乎) — browser headers for fetch engine, minimal flags to keep fetch in fallback
+  "zhihu.com": {
+    scrapeOptions: {
+      skipTlsVerification: true,
+      headers: {
+        "Accept-Language":
+          "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+        Referer: "https://www.zhihu.com/",
+      },
+    },
+    internalOptions: {},
+  },
+  "zhuanlan.zhihu.com": {
+    scrapeOptions: {
+      skipTlsVerification: true,
+      headers: {
+        "Accept-Language":
+          "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+        Referer: "https://zhuanlan.zhihu.com/",
+      },
+    },
+    internalOptions: {},
+  },
 };

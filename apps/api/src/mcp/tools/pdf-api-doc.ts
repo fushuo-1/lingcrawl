@@ -96,10 +96,6 @@ if (result.success) {
 - 超时: OCR 处理通常需要 10-60 秒, 建议 timeout 设为 180 秒
 - 配置: 需要 MINERU_API_TOKEN 环境变量 (在 https://mineru.net/apiManage 获取)
 
-**与 MCP 工具 upload_pdf 的区别 (Difference from upload_pdf MCP tool):**
-- MCP upload_pdf: 通过 base64 编码传递 PDF 内容, 适合小文件 (受 MCP 参数大小限制)
-- REST API: 通过 multipart/form-data 上传, 支持任意大小, 标准 HTTP 协议
-- 两者共享 tmpfs 临时存储和 PDF 引擎处理流程
 
 **错误码 (Error Codes):**
 - 400: 请求格式错误或文件不是 PDF

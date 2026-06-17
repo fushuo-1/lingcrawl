@@ -51,14 +51,17 @@ export async function scrapeURLWithFetch(
     };
   } else {
     try {
-      const x = await undici.fetch(meta.rewrittenUrl ?? meta.url, {
-        dispatcher: getSecureDispatcher(meta.options.skipTlsVerification),
-        redirect: "follow",
+      const dispatcher = getSecureDispatcher(meta.options.skipTlsVerification);
+
+      // Use undici.request to support custom Cookie header
+      const reqResult = await undici.request(meta.rewrittenUrl ?? meta.url, {
+        method: "GET",
+        dispatcher,
         headers: meta.options.headers,
         signal: meta.abort.asSignal(),
       });
 
-      const buf = Buffer.from(await x.arrayBuffer());
+      const buf = Buffer.from(await reqResult.body.arrayBuffer());
       let text = buf.toString("utf8");
       const charset = (text.match(
         /<meta\b[^>]*charset\s*=\s*["']?([^"'\s\/>]+)/i,
@@ -74,11 +77,25 @@ export async function scrapeURLWithFetch(
         });
       }
 
+      // Extract headers as [string, string][]
+      const headers: [string, string][] = [];
+      for (const [key, value] of Object.entries(reqResult.headers)) {
+        if (value !== undefined) {
+          if (Array.isArray(value)) {
+            for (const v of value) {
+              headers.push([key, v]);
+            }
+          } else {
+            headers.push([key, String(value)]);
+          }
+        }
+      }
+
       response = {
-        url: x.url,
+        url: meta.rewrittenUrl ?? meta.url,
         body: text,
-        status: x.status,
-        headers: [...x.headers],
+        status: reqResult.statusCode,
+        headers,
       };
 
       if (meta.mock === null) {

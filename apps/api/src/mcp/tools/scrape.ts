@@ -20,13 +20,18 @@ export function registerScrapeTool(server: McpServer) {
         .max(60000)
         .optional()
         .describe("Time in ms to wait for JavaScript rendering (0-60000)"),
+      headers: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("Custom HTTP headers to include in the request. Useful for passing cookies (e.g. { 'Cookie': 'd_c0=...' } for zhihu.com)"),
     },
-    async ({ url, formats, waitFor }) => {
+    async ({ url, formats, waitFor, headers }) => {
       try {
         const parsed = scrapeRequestSchema.parse({
           url,
           formats: formats.map(f => ({ type: f })),
           waitFor,
+          headers,
         });
 
         const job = buildSyncScrapeJob({

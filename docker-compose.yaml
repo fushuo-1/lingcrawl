@@ -185,11 +185,11 @@ services:
     networks:
       - backend
     environment:
-      HOST: 127.0.0.1
+      HOST: 0.0.0.0
       PORT: 3001
       DATA_DIR: /data
     volumes:
-      - lingcrawl_memory_data:/data
+      - //c/Users/34317/.lingcrawl:/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -202,9 +202,6 @@ services:
         max-size: "5m"
         max-file: "2"
         compress: "true"
-
-volumes:
-  lingcrawl_memory_data:
 
 networks:
   backend:
