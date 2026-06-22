@@ -14,9 +14,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { InitializeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type Database from "better-sqlite3";
+import { config } from "../config.js";
 import { getDb } from "../db/client.js";
+import { FileManager } from "../kb/file-manager.js";
+import { IndexStore } from "../kb/index-store.js";
+import { KnowledgeStore } from "../kb/knowledge-store.js";
 import { MemoryStoreImpl } from "../memory/store.js";
 import { SessionStore } from "../session/store.js";
+import { registerKbWriteTool } from "./tools/kb-write.js";
 import { registerMemoryResources } from "./resources.js";
 import { registerMemoryTools } from "./tools/memory.js";
 import { registerSessionTools } from "./tools/session.js";
@@ -107,6 +112,12 @@ export function createMemoryMcpServer(
     getClientName: () => clientName,
   });
   registerMemoryResources(server, { store: memoryStore });
+
+  // Knowledge-base write path (issue #94)
+  const fileManager = new FileManager(config.KB_DATA_DIR);
+  const kbIndexStore = new IndexStore(db);
+  const knowledgeStore = new KnowledgeStore({ fileManager, indexStore: kbIndexStore });
+  registerKbWriteTool(server, knowledgeStore);
 
   return {
     server,
