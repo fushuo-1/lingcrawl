@@ -66,3 +66,47 @@ CREATE TABLE IF NOT EXISTS pending_memories (
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected'))
 );
+
+-- Knowledge-base notes (issue #93)
+CREATE TABLE IF NOT EXISTS notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  path TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  tags TEXT NOT NULL DEFAULT '[]',  -- JSON array
+  content TEXT NOT NULL,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE INDEX IF NOT EXISTS idx_notes_path ON notes(path);
+
+-- FTS5 virtual table for notes full-text search
+CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+  title, content,
+  content='notes', content_rowid='id'
+);
+
+-- Triggers that keep notes_fts in sync with notes
+CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+  INSERT INTO notes_fts(rowid, title, content)
+  VALUES (new.id, new.title, new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+  INSERT INTO notes_fts(notes_fts, rowid, title, content)
+  VALUES('delete', old.id, old.title, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+  INSERT INTO notes_fts(notes_fts, rowid, title, content)
+  VALUES('delete', old.id, old.title, old.content);
+  INSERT INTO notes_fts(rowid, title, content)
+  VALUES (new.id, new.title, new.content);
+END;
+
+-- Bidirectional links between notes (issue #93)
+CREATE TABLE IF NOT EXISTS links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_path TEXT NOT NULL,
+  target_title TEXT NOT NULL,
+  UNIQUE(source_path, target_title)
+);
+CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_path);
+CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_title);
