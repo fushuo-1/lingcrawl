@@ -15,8 +15,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { InitializeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type Database from "better-sqlite3";
 import { getDb } from "../db/client.js";
+import { IndexStore } from "../kb/index-store.js";
 import { MemoryStoreImpl } from "../memory/store.js";
 import { SessionStore } from "../session/store.js";
+import { registerKbSearchTool } from "./tools/kb-search.js";
 import { registerMemoryResources } from "./resources.js";
 import { registerMemoryTools } from "./tools/memory.js";
 import { registerSessionTools } from "./tools/session.js";
@@ -107,6 +109,10 @@ export function createMemoryMcpServer(
     getClientName: () => clientName,
   });
   registerMemoryResources(server, { store: memoryStore });
+
+  // Knowledge Base search (issue #96)
+  const indexStore = new IndexStore(db);
+  registerKbSearchTool(server, indexStore);
 
   return {
     server,

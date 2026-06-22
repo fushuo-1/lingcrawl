@@ -83,6 +83,7 @@ describe("MCP server — tools/list", () => {
     const { tools } = await fixtures.client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
+      "kb_search",
       "memory_add",
       "memory_remove",
       "memory_replace",
