@@ -79,11 +79,13 @@ describe("MCP server — tools/list", () => {
   });
   afterEach(() => fixtures.close());
 
-  it("registers all 8 expected tools", async () => {
+  it("registers all expected tools", async () => {
     const { tools } = await fixtures.client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
+      "kb_read",
       "kb_search",
+      "kb_write",
       "memory_add",
       "memory_remove",
       "memory_replace",

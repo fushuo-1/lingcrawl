@@ -21,6 +21,7 @@ import { IndexStore } from "../kb/index-store.js";
 import { KnowledgeStore } from "../kb/knowledge-store.js";
 import { MemoryStoreImpl } from "../memory/store.js";
 import { SessionStore } from "../session/store.js";
+import { registerKbReadTool } from "./tools/kb-read.js";
 import { registerKbSearchTool } from "./tools/kb-search.js";
 import { registerKbWriteTool } from "./tools/kb-write.js";
 import { registerMemoryResources } from "./resources.js";
@@ -119,6 +120,7 @@ export function createMemoryMcpServer(
   const kbIndexStore = new IndexStore(db);
   const knowledgeStore = new KnowledgeStore({ fileManager, indexStore: kbIndexStore });
   registerKbWriteTool(server, knowledgeStore);
+  registerKbReadTool(server, knowledgeStore);
   registerKbSearchTool(server, kbIndexStore);
 
   return {
