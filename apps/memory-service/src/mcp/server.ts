@@ -21,6 +21,7 @@ import { IndexStore } from "../kb/index-store.js";
 import { KnowledgeStore } from "../kb/knowledge-store.js";
 import { MemoryStoreImpl } from "../memory/store.js";
 import { SessionStore } from "../session/store.js";
+import { registerKbSearchTool } from "./tools/kb-search.js";
 import { registerKbWriteTool } from "./tools/kb-write.js";
 import { registerMemoryResources } from "./resources.js";
 import { registerMemoryTools } from "./tools/memory.js";
@@ -113,11 +114,12 @@ export function createMemoryMcpServer(
   });
   registerMemoryResources(server, { store: memoryStore });
 
-  // Knowledge-base write path (issue #94)
+  // Knowledge Base (issues #94, #96)
   const fileManager = new FileManager(config.KB_DATA_DIR);
   const kbIndexStore = new IndexStore(db);
   const knowledgeStore = new KnowledgeStore({ fileManager, indexStore: kbIndexStore });
   registerKbWriteTool(server, knowledgeStore);
+  registerKbSearchTool(server, kbIndexStore);
 
   return {
     server,
