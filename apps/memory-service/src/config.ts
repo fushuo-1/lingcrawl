@@ -19,24 +19,11 @@ const configSchema = z.object({
   HOST: z.string().default("127.0.0.1"),
   PORT: z.coerce.number().int().positive().default(3001),
 
-  // Storage
+  // Storage — SQLite database directory (memory.db lives here)
   DATA_DIR: z.string().default("~/.lingcrawl"),
 
-  // Capacity limits (chars)
-  MEMORY_CHAR_LIMIT: z.coerce.number().int().positive().default(2200),
-  USER_CHAR_LIMIT: z.coerce.number().int().positive().default(1375),
-
-  // v0.2 — Background LLM extractor (schema-only in v0.1)
-  EXTRACTOR_ENABLED: z.stringbool().default(false),
-  EXTRACTOR_INTERVAL: z.string().default("30m"),
-  EXTRACTOR_BATCH_SIZE: z.coerce.number().int().positive().default(20),
-  LLM_PROVIDER: z.enum(["openai", "anthropic"]).default("openai"),
-  LLM_BASE_URL: z.string().default("https://api.openai.com/v1"),
-  LLM_API_KEY: z.string().optional(),
-  LLM_MODEL: z.string().default("gpt-4o-mini"),
-  LLM_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.2),
-  LLM_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.7),
-  LLM_OUTPUT_TARGET: z.enum(["pending", "direct"]).default("pending"),
+  // Knowledge Base — Markdown files directory
+  KB_DATA_DIR: z.string().default("~/.lingcrawl/knowledge/"),
 });
 
 /* Parse — fail-fast with a readable error */
@@ -51,28 +38,35 @@ function parseConfig(env: NodeJS.ProcessEnv) {
     process.exit(1);
   }
 
-  // Expand ~ in DATA_DIR to os.homedir()
-  const rawDataDir = result.data.DATA_DIR;
-  const dataDir =
-    rawDataDir === "~"
+  // Expand ~ in paths to os.homedir()
+  const expandHome = (p: string) =>
+    p === "~"
       ? os.homedir()
-      : rawDataDir.startsWith("~/")
-        ? path.join(os.homedir(), rawDataDir.slice(2))
-        : rawDataDir;
+      : p.startsWith("~/")
+        ? path.join(os.homedir(), p.slice(2))
+        : p;
 
-  // Ensure DATA_DIR exists (mkdir -p). Fail fast on permissions / path errors.
-  try {
-    fs.mkdirSync(dataDir, { recursive: true });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    // eslint-disable-next-line no-console
-    console.error(
-      `[memory-service] Failed to create DATA_DIR "${dataDir}": ${message}`,
-    );
-    process.exit(1);
+  const dataDir = expandHome(result.data.DATA_DIR);
+  const kbDataDir = expandHome(result.data.KB_DATA_DIR);
+
+  // Ensure directories exist (mkdir -p). Fail fast on permissions / path errors.
+  for (const [label, dir] of [
+    ["DATA_DIR", dataDir],
+    ["KB_DATA_DIR", kbDataDir],
+  ] as const) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // eslint-disable-next-line no-console
+      console.error(
+        `[memory-service] Failed to create ${label} "${dir}": ${message}`,
+      );
+      process.exit(1);
+    }
   }
 
-  return { ...result.data, DATA_DIR: dataDir };
+  return { ...result.data, DATA_DIR: dataDir, KB_DATA_DIR: kbDataDir };
 }
 
 export const config = parseConfig(process.env);

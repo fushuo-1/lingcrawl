@@ -1,7 +1,10 @@
 import { createDefaultEsmPreset, type JestConfigWithTsJest } from "ts-jest";
 
 const config: JestConfigWithTsJest = {
-  ...createDefaultEsmPreset(),
+  ...createDefaultEsmPreset({
+    // Enable ESM support for Node 20+
+    nodeResolve: true,
+  }),
   verbose: true,
   testPathIgnorePatterns: ["<rootDir>/dist/"],
   forceExit: true,
