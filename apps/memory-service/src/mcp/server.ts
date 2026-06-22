@@ -1,39 +1,30 @@
 /**
- * MCP server factory — issue #75.
+ * MCP server factory — knowledge base edition (issue #97).
  *
  * Wires together:
  *   1. The `McpServer` instance (from `@modelcontextprotocol/sdk/server/mcp`).
- *   2. An `initialize` handler override that captures the connecting client's
- *      `clientInfo.name` so the `session_log` tool can stamp it onto the
- *      session row (user story #22).
- *   3. The 8 tools defined in `./tools/*`.
+ *   2. The 4 knowledge-base tools: kb_write, kb_read, kb_search, kb_list.
+ *   3. Two MCP resources: kb://recent, kb://index.
  *
  * Pure factory — no transport wiring. The HTTP transport is in `transport.ts`
  * and is the only thing that talks to Fastify.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { InitializeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type Database from "better-sqlite3";
 import { config } from "../config.js";
 import { getDb } from "../db/client.js";
 import { FileManager } from "../kb/file-manager.js";
 import { IndexStore } from "../kb/index-store.js";
 import { KnowledgeStore } from "../kb/knowledge-store.js";
-import { MemoryStoreImpl } from "../memory/store.js";
-import { SessionStore } from "../session/store.js";
+import { registerKbListTool } from "./tools/kb-list.js";
 import { registerKbReadTool } from "./tools/kb-read.js";
 import { registerKbSearchTool } from "./tools/kb-search.js";
 import { registerKbWriteTool } from "./tools/kb-write.js";
-import { registerMemoryResources } from "./resources.js";
-import { registerMemoryTools } from "./tools/memory.js";
-import { registerSessionTools } from "./tools/session.js";
-import { registerUserTools } from "./tools/user.js";
+import { registerKbResources } from "./resources.js";
 
 export interface MemoryMcpServer {
   /** The McpServer instance — pass to `transport.ts` to wire HTTP. */
   server: McpServer;
-  /** Most recently observed `clientInfo.name` (or null if no initialize yet). */
-  getClientName: () => string | null;
   /** Close the underlying SQLite singleton. Call on process shutdown. */
   closeDb: () => void;
 }
@@ -58,79 +49,33 @@ export function createMemoryMcpServer(
     {
       capabilities: {
         tools: {},
-        // resources: {}  // added in #76
+        resources: {},
       },
       instructions:
-        "Persistent memory for AI agents. Use memory_* / user_* / session_* " +
-        "tools to store and recall facts across sessions.",
+        "Knowledge base for AI agents. Use kb_write to save notes, " +
+        "kb_read to retrieve them, kb_search for full-text search, " +
+        "and kb_list to browse. Read kb://recent and kb://index " +
+        "resources for session context.",
     },
   );
 
-  // Captured at initialize time. Read by registerSessionTools below.
-  let clientName: string | null = null;
-
-  // Override the default `initialize` handler so we can capture clientInfo.
-  // (The SDK auto-registers one; setRequestHandler replaces it.)
-  server.server.setRequestHandler(InitializeRequestSchema, (request, extra) => {
-    const info = request.params?.clientInfo;
-    if (info && typeof info.name === "string" && info.name.length > 0) {
-      clientName = info.name;
-    }
-    return {
-      protocolVersion: request.params?.protocolVersion ?? "2024-11-05",
-      capabilities: {
-        tools: {},
-        // resources: {}  // added in #76
-      },
-      serverInfo: {
-        name: "lingcrawl-memory",
-        version: "0.1.0",
-      },
-    };
-  });
-
   // Use the injected DB (for tests) or the shared singleton (in prod).
-  // If `options.db` is provided, touch the singleton too so any future
-  // `getDb()` call returns the same connection — keeps the test DB and
-  // the singleton in lockstep.
   const db = options.db ?? getDb();
-  const memoryStore = new MemoryStoreImpl(db);
-  const sessionStore = new SessionStore(db);
 
-  // user_update's `deleteAll` is wired to a direct DELETE on the same
-  // database connection. This is the v0.1 full-replace shortcut (see
-  // user.ts for the rationale).
-  const deleteAllForUser = (target: "user"): void => {
-    if (target !== "user") {
-      throw new Error(`deleteAll only supports 'user' target, got '${target}'`);
-    }
-    db.prepare("DELETE FROM memory_entries WHERE target = ?").run("user");
-  };
-
-  registerMemoryTools(server, memoryStore);
-  registerUserTools(server, { store: memoryStore, deleteAll: deleteAllForUser });
-  registerSessionTools(server, {
-    store: sessionStore,
-    getClientName: () => clientName,
-  });
-  registerMemoryResources(server, { store: memoryStore });
-
-  // Knowledge Base (issues #94, #96)
+  // Knowledge Base
   const fileManager = new FileManager(config.KB_DATA_DIR);
   const kbIndexStore = new IndexStore(db);
   const knowledgeStore = new KnowledgeStore({ fileManager, indexStore: kbIndexStore });
+
   registerKbWriteTool(server, knowledgeStore);
   registerKbReadTool(server, knowledgeStore);
   registerKbSearchTool(server, kbIndexStore);
+  registerKbListTool(server, knowledgeStore);
+  registerKbResources(server, { indexStore: kbIndexStore });
 
   return {
     server,
-    getClientName: () => clientName,
     closeDb: () => {
-      // The McpServer itself doesn't own a DB handle; we close the singleton
-      // only if the caller asks. The default `getDb()` lazy-init pattern
-      // means we may not even have a connection — so import dynamically
-      // and call closeDb() to be safe.
       import("../db/client.js").then(({ closeDb }) => closeDb());
     },
   };

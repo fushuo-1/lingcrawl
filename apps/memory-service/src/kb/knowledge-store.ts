@@ -7,7 +7,7 @@
  */
 import path from "node:path";
 import type { FileManager } from "./file-manager.js";
-import type { IndexStore } from "./index-store.js";
+import type { IndexStore, NoteMeta } from "./index-store.js";
 import {
   type Frontmatter,
   parse as parseFrontmatter,
@@ -117,6 +117,17 @@ export class KnowledgeStore {
     const raw = this.fileManager.read(notePath);
     const parsed = parseFrontmatter(raw);
     return { frontmatter: parsed.frontmatter, body: parsed.body };
+  }
+
+  /**
+   * List notes with optional filters. Delegates to IndexStore.
+   */
+  listNotes(filters?: {
+    pathPrefix?: string;
+    tags?: string[];
+    limit?: number;
+  }): NoteMeta[] {
+    return this.indexStore.listNotes(filters);
   }
 
   /* ---- Helpers ---- */

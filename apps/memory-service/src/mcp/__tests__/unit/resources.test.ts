@@ -1,31 +1,39 @@
 /**
- * End-to-end tests for MCP resources (memory://notes, memory://user) — issue #76.
+ * End-to-end tests for MCP resources (kb://recent, kb://index) — issue #97.
  *
  * Uses the SDK's `InMemoryTransport` + `Client` so we exercise the
  * full MCP protocol path (resources/list, resources/read) without
  * going through HTTP. Each test uses a fresh in-memory SQLite DB.
  *
  * Coverage map:
- *  - resources/list returns both memory:// URIs
- *  - resources/read(memory://notes) returns rendered notes markdown
- *  - resources/read(memory://user) returns rendered user markdown
+ *  - resources/list returns both kb:// URIs
+ *  - resources/read(kb://recent) returns rendered recent notes markdown
+ *  - resources/read(kb://index) returns rendered index tree markdown
  *  - both resources report text/markdown mimeType
- *  - empty store: notes/user resources still return a valid (empty-state) doc
- *  - takenAt is propagated to the snapshot timestamp in the rendered text
+ *  - empty store: both resources still return a valid (empty-state) doc
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type Database from "better-sqlite3";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { _initDb } from "../../../db/client.js";
-import { createMemoryMcpServer } from "../server.js";
+import { createMemoryMcpServer } from "../../server.js";
 
 interface TestFixtures {
   client: Client;
   close: () => void;
 }
 
-async function setup(now: () => Date = () => new Date("2026-06-08T14:23:01Z")): Promise<TestFixtures> {
+async function setup(): Promise<TestFixtures> {
   const db: Database.Database = _initDb(":memory:");
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-resources-test-"));
+
+  const origConfig = (await import("../../../config.js")).config;
+  const origKbDir = origConfig.KB_DATA_DIR;
+  origConfig.KB_DATA_DIR = tmpDir;
+
   const mcp = createMemoryMcpServer({ db });
 
   const client = new Client(
@@ -41,7 +49,9 @@ async function setup(now: () => Date = () => new Date("2026-06-08T14:23:01Z")): 
   return {
     client,
     close: () => {
+      origConfig.KB_DATA_DIR = origKbDir;
       if (db.open) db.close();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
     },
   };
 }
@@ -54,10 +64,10 @@ describe("MCP server — resources/list", () => {
   });
   afterEach(() => fixtures.close());
 
-  it("returns both memory:// URIs", async () => {
+  it("returns both kb:// URIs", async () => {
     const { resources } = await fixtures.client.listResources();
     const uris = resources.map((r) => r.uri).sort();
-    expect(uris).toEqual(["memory://notes", "memory://user"]);
+    expect(uris).toEqual(["kb://index", "kb://recent"]);
   });
 
   it("every resource reports text/markdown mimeType", async () => {
@@ -76,38 +86,48 @@ describe("MCP server — resources/read", () => {
   });
   afterEach(() => fixtures.close());
 
-  it("memory://notes returns the empty-state document when no entries", async () => {
-    const result = await fixtures.client.readResource({ uri: "memory://notes" });
+  it("kb://recent returns empty-state when no notes", async () => {
+    const result = await fixtures.client.readResource({ uri: "kb://recent" });
     const text = result.contents[0]?.text ?? "";
-    expect(text).toContain("Agent's Personal Notes");
-    expect(text).toContain("Empty — no entries yet.");
-    expect(text).toContain("2026-06-08 14:23:01");
+    expect(text).toContain("Knowledge Base — Recent Notes");
+    expect(text).toContain("No notes yet");
   });
 
-  it("memory://user returns the empty-state document when no entries", async () => {
-    const result = await fixtures.client.readResource({ uri: "memory://user" });
+  it("kb://index returns empty-state when no notes", async () => {
+    const result = await fixtures.client.readResource({ uri: "kb://index" });
     const text = result.contents[0]?.text ?? "";
-    expect(text).toContain("User Profile");
-    expect(text).toContain("Empty — no entries yet.");
+    expect(text).toContain("Knowledge Base — Index");
+    expect(text).toContain("No notes yet");
   });
 
-  it("memory://user contains persisted content after user_update", async () => {
+  it("kb://recent contains notes after kb_write", async () => {
     await fixtures.client.callTool({
-      name: "user_update",
-      arguments: { content: "Prefers concise responses" },
+      name: "kb_write",
+      arguments: {
+        content: "# Project Uses Pnpm\n\nContent.",
+        tags: ["dev"],
+      },
     });
-    const result = await fixtures.client.readResource({ uri: "memory://user" });
+
+    const result = await fixtures.client.readResource({ uri: "kb://recent" });
     const text = result.contents[0]?.text ?? "";
-    expect(text).toContain("Prefers concise responses");
+    expect(text).toContain("Project Uses Pnpm");
+    expect(text).toContain("| Path | Title | Tags | Updated |");
   });
 
-  it("memory://notes contains persisted content after memory_add", async () => {
+  it("kb://index contains directory tree after kb_write", async () => {
     await fixtures.client.callTool({
-      name: "memory_add",
-      arguments: { target: "memory", content: "Project uses pnpm" },
+      name: "kb_write",
+      arguments: {
+        content: "# Docker Build\n\nContent.",
+        path: "调试经验/Docker/构建.md",
+      },
     });
-    const result = await fixtures.client.readResource({ uri: "memory://notes" });
+
+    const result = await fixtures.client.readResource({ uri: "kb://index" });
     const text = result.contents[0]?.text ?? "";
-    expect(text).toContain("Project uses pnpm");
+    expect(text).toContain("调试经验/");
+    expect(text).toContain("- Docker/");
+    expect(text).toContain("- 构建.md");
   });
 });

@@ -1,29 +1,27 @@
 /**
- * Concurrency tests for the memory service — issue #78.
+ * Concurrency tests for the knowledge base — issue #97.
  *
  * Verifies the SQLite WAL-mode singleton handles two concurrent MCP
  * clients writing to the same database without dropping or corrupting
- * rows. (The two clients are the realistic scenario: Claude Code and
- * Codex connected to the same memory service.)
+ * rows.
  *
  * Coverage:
- *  - 2 clients, 20 concurrent memory_add calls each → 40 rows total
- *  - 2 clients, 10 concurrent session_log calls each → 20 exchanges total
+ *  - 2 clients, 10 concurrent kb_write calls each → 20 notes total
  *  - No row loss, no duplicate ids, no exceptions
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type Database from "better-sqlite3";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { _initDb } from "../../../db/client.js";
-import { createMemoryMcpServer } from "../server.js";
+import { createMemoryMcpServer } from "../../server.js";
 
 async function makeClient(
   db: Database.Database,
   clientName: string,
 ): Promise<{ client: Client; close: () => void }> {
-  // Each client connects to the SAME McpServer, so both share the
-  // MemoryStore bound to `db`. Two parallel SDK clients = the realistic
-  // "Claude Code + Codex" scenario.
   const mcp = createMemoryMcpServer({ db });
 
   const client = new Client(
@@ -57,27 +55,43 @@ async function callTool(
   return (await client.callTool({ name, arguments: args })) as ToolResult;
 }
 
-describe("MCP server — concurrency (issue #78)", () => {
+describe("MCP server — concurrency (issue #97)", () => {
   let db: Database.Database;
+  let tmpDir: string;
   let a: { client: Client; close: () => void };
   let b: { client: Client; close: () => void };
 
   beforeEach(async () => {
     db = _initDb(":memory:");
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-concurrency-test-"));
+
+    const origConfig = (await import("../../../config.js")).config;
+    const origKbDir = origConfig.KB_DATA_DIR;
+    origConfig.KB_DATA_DIR = tmpDir;
+
     a = await makeClient(db, "claude-code");
     b = await makeClient(db, "codex");
   });
   afterEach(() => {
     if (db.open) db.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("two clients can write memory entries concurrently without loss", async () => {
-    const N = 20;
+  it("two clients can write KB notes concurrently without loss", async () => {
+    const N = 10;
     const aWrites = Array.from({ length: N }, (_, i) =>
-      callTool(a.client, "memory_add", { target: "memory", content: `claude-code: ${i}` }),
+      callTool(a.client, "kb_write", {
+        content: `# Claude Note ${i}\n\nContent from claude-code.`,
+        tags: ["claude"],
+        path: `concurrent/claude-${i}.md`,
+      }),
     );
     const bWrites = Array.from({ length: N }, (_, i) =>
-      callTool(b.client, "memory_add", { target: "memory", content: `codex: ${i}` }),
+      callTool(b.client, "kb_write", {
+        content: `# Codex Note ${i}\n\nContent from codex.`,
+        tags: ["codex"],
+        path: `concurrent/codex-${i}.md`,
+      }),
     );
 
     const results = await Promise.all([...aWrites, ...bWrites]);
@@ -85,49 +99,31 @@ describe("MCP server — concurrency (issue #78)", () => {
       expect(r.isError).toBeFalsy();
     }
 
-    // 40 rows in the store.
-    const row = db.prepare("SELECT COUNT(*) AS n FROM memory_entries").get() as { n: number };
-    expect(row.n).toBe(40);
-  });
-
-  it("two clients can log exchanges concurrently without loss", async () => {
-    const N = 10;
-    const aLogs = Array.from({ length: N }, (_, i) =>
-      callTool(a.client, "session_log", {
-        session_id: "claude-session",
-        user_message: `claude u${i}`,
-        assistant_message: `claude a${i}`,
-      }),
-    );
-    const bLogs = Array.from({ length: N }, (_, i) =>
-      callTool(b.client, "session_log", {
-        session_id: "codex-session",
-        user_message: `codex u${i}`,
-        assistant_message: `codex a${i}`,
-      }),
-    );
-
-    const results = await Promise.all([...aLogs, ...bLogs]);
-    for (const r of results) {
-      expect(r.isError).toBeFalsy();
-    }
-
-    const row = db.prepare("SELECT COUNT(*) AS n FROM exchanges").get() as { n: number };
+    // 20 rows in the notes table.
+    const row = db.prepare("SELECT COUNT(*) AS n FROM notes").get() as { n: number };
     expect(row.n).toBe(20);
   });
 
-  it("concurrent writes do not produce duplicate ids (PRIMARY KEY preserved)", async () => {
-    const N = 20;
+  it("concurrent writes do not produce duplicate ids", async () => {
+    const N = 10;
     const aWrites = Array.from({ length: N }, (_, i) =>
-      callTool(a.client, "memory_add", { target: "memory", content: `a${i}` }),
+      callTool(a.client, "kb_write", {
+        content: `# A${i}\n\n.`,
+        tags: ["a"],
+        path: `ids/a-${i}.md`,
+      }),
     );
     const bWrites = Array.from({ length: N }, (_, i) =>
-      callTool(b.client, "memory_add", { target: "memory", content: `b${i}` }),
+      callTool(b.client, "kb_write", {
+        content: `# B${i}\n\n.`,
+        tags: ["b"],
+        path: `ids/b-${i}.md`,
+      }),
     );
 
     const results = await Promise.all([...aWrites, ...bWrites]);
-    const ids = results.map((r) => JSON.parse(r.content[0].text).id as number);
-    const unique = new Set(ids);
-    expect(unique.size).toBe(40); // all distinct
+    const paths = results.map((r) => JSON.parse(r.content[0].text).path as string);
+    const unique = new Set(paths);
+    expect(unique.size).toBe(20); // all distinct
   });
 });
