@@ -17,8 +17,10 @@ import { FileManager } from "../kb/file-manager.js";
 import { IndexStore } from "../kb/index-store.js";
 import { KnowledgeStore } from "../kb/knowledge-store.js";
 import { registerKbListTool } from "./tools/kb-list.js";
+import { registerKbLinkTool } from "./tools/kb-link.js";
 import { registerKbReadTool } from "./tools/kb-read.js";
 import { registerKbSearchTool } from "./tools/kb-search.js";
+import { registerKbSyncTool } from "./tools/kb-sync.js";
 import { registerKbWriteTool } from "./tools/kb-write.js";
 import { registerKbResources } from "./resources.js";
 
@@ -54,8 +56,9 @@ export function createMemoryMcpServer(
       instructions:
         "Knowledge base for AI agents. Use kb_write to save notes, " +
         "kb_read to retrieve them, kb_search for full-text search, " +
-        "and kb_list to browse. Read kb://recent and kb://index " +
-        "resources for session context.",
+        "kb_list to browse, kb_link for backlinks and broken links, " +
+        "and kb_sync to re-index after external file changes. " +
+        "Read kb://recent and kb://index resources for session context.",
     },
   );
 
@@ -71,6 +74,8 @@ export function createMemoryMcpServer(
   registerKbReadTool(server, knowledgeStore);
   registerKbSearchTool(server, kbIndexStore);
   registerKbListTool(server, knowledgeStore);
+  registerKbLinkTool(server, knowledgeStore);
+  registerKbSyncTool(server, knowledgeStore);
   registerKbResources(server, { indexStore: kbIndexStore });
 
   return {

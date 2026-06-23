@@ -91,4 +91,26 @@ export class FileManager {
       isDirectory: e.isDirectory(),
     }));
   }
+
+  /**
+   * Recursively scan baseDir for all .md files.
+   * Returns relative paths with mtime.
+   */
+  listAllMarkdown(): Array<{ relativePath: string; mtime: number }> {
+    const results: Array<{ relativePath: string; mtime: number }> = [];
+    const walk = (dir: string, rel: string) => {
+      if (!fs.existsSync(dir)) return;
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fullRel = rel ? path.join(rel, entry.name) : entry.name;
+        if (entry.isDirectory()) {
+          walk(path.join(dir, entry.name), fullRel);
+        } else if (entry.name.endsWith(".md")) {
+          const stat = fs.statSync(path.join(dir, entry.name));
+          results.push({ relativePath: fullRel, mtime: stat.mtimeMs });
+        }
+      }
+    };
+    walk(this.baseDir, "");
+    return results;
+  }
 }

@@ -7,7 +7,7 @@
  */
 import path from "node:path";
 import type { FileManager } from "./file-manager.js";
-import type { IndexStore, NoteMeta } from "./index-store.js";
+import type { IndexStore, Link, NoteMeta } from "./index-store.js";
 import {
   type Frontmatter,
   parse as parseFrontmatter,
@@ -128,6 +128,102 @@ export class KnowledgeStore {
     limit?: number;
   }): NoteMeta[] {
     return this.indexStore.listNotes(filters);
+  }
+
+  /**
+   * Get backlinks for a note — which other notes link to it via [[title]].
+   */
+  getBacklinks(notePath: string): Link[] {
+    const meta = this.indexStore.getNoteMeta(notePath);
+    if (!meta) throw new NoteNotFoundError(notePath);
+    return this.indexStore.getBacklinks(meta.title);
+  }
+
+  /**
+   * Get all broken links — [[target]] where target note does not exist.
+   */
+  getBrokenLinks(): Link[] {
+    return this.indexStore.getBrokenLinks();
+  }
+
+  /**
+   * Check sync status of a single note.
+   * Returns whether the note is indexed, on disk, and in sync.
+   */
+  checkNoteSync(notePath: string): {
+    indexed: boolean;
+    onDisk: boolean;
+    inSync: boolean;
+  } {
+    const indexed = this.indexStore.getNoteMeta(notePath) !== null;
+    const onDisk = this.fileManager.exists(notePath);
+    const inSync = indexed && onDisk;
+    return { indexed, onDisk, inSync };
+  }
+
+  /**
+   * Sync the SQLite index with the actual files on disk.
+   * Detects added, updated, and removed notes.
+   *
+   * When dryRun is true, returns detailed file lists without modifying anything.
+   */
+  syncIndex(dryRun = false): {
+    added: number;
+    updated: number;
+    removed: number;
+    addedPaths?: string[];
+    removedPaths?: string[];
+  } {
+    const indexed = new Map(this.indexStore.listNotes().map(n => [n.path, n]));
+    const onDisk = this.fileManager.listAllMarkdown();
+
+    const addedPaths: string[] = [];
+    const removedPaths: string[] = [];
+    let added = 0, updated = 0, removed = 0;
+
+    // Check files on disk
+    for (const { relativePath } of onDisk) {
+      const raw = this.fileManager.read(relativePath);
+      const parsed = parseFrontmatter(raw);
+      const title = this.extractTitle(parsed.body);
+      const tags = parsed.frontmatter.tags ?? [];
+
+      const existing = indexed.get(relativePath);
+      if (!existing) {
+        // New file not in index
+        addedPaths.push(relativePath);
+        if (!dryRun) {
+          this.indexStore.upsertNote({ path: relativePath, title, tags, content: raw });
+          this.indexStore.removeLinksForNote(relativePath);
+          this.updateLinks(relativePath, parsed.body);
+        }
+        added++;
+      } else {
+        // Content changed — update index
+        if (!dryRun) {
+          this.indexStore.upsertNote({ path: relativePath, title, tags, content: raw });
+          this.indexStore.removeLinksForNote(relativePath);
+          this.updateLinks(relativePath, parsed.body);
+        }
+        updated++;
+      }
+
+      indexed.delete(relativePath);
+    }
+
+    // Remaining entries in indexed are files deleted from disk
+    for (const [notePath] of indexed) {
+      removedPaths.push(notePath);
+      if (!dryRun) {
+        this.indexStore.deleteNote(notePath);
+        this.indexStore.removeLinksForNote(notePath);
+      }
+      removed++;
+    }
+
+    return dryRun
+      ? { added, updated, removed, addedPaths, removedPaths }
+      : { added, updated, removed };
   }
 
   /* ---- Helpers ---- */

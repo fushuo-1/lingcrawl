@@ -79,13 +79,15 @@ describe("MCP server — tools/list", () => {
   });
   afterEach(() => fixtures.close());
 
-  it("registers exactly 4 knowledge-base tools", async () => {
+  it("registers exactly 6 knowledge-base tools", async () => {
     const { tools } = await fixtures.client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
+      "kb_link",
       "kb_list",
       "kb_read",
       "kb_search",
+      "kb_sync",
       "kb_write",
     ]);
   });
