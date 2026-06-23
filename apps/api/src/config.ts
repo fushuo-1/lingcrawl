@@ -84,6 +84,22 @@ const configSchema = z.object({
   PLAYWRIGHT_MICROSERVICE_URL: z.string().optional(),
   BLOCK_MEDIA: z.stringbool().optional(),
 
+  // Vision OCR
+  VISION_OCR_ENABLED: z.stringbool().optional(),
+  VISION_API_URL: z.string().optional(),
+  VISION_API_KEY: z.string().optional(),
+  VISION_MODEL: z.string().optional(),
+  VISION_OCR_TIMEOUT: z.coerce.number().default(30000),
+  VISION_OCR_PROMPT: z.string().optional(),
+
+  // Zhihu
+  ZHIHU_COOKIE: z.string().optional(),
+  ZHIHU_RATE_LIMIT_MS: z.coerce.number().default(3000),
+
+  // Knowledge Base
+  KB_DATA_HOST: z.string().optional(),
+  KB_DATA_DIR: z.string().optional(),
+
   // System
   MAX_CPU: z.coerce.number().default(0.8),
   MAX_RAM: z.coerce.number().default(0.8),
