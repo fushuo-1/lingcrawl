@@ -56,8 +56,9 @@ export class KnowledgeStore {
     content: string;
     tags?: string[];
     path?: string;
+    overwrite?: boolean;
   }): WriteResult {
-    const { content, tags: paramTags, path: explicitPath } = params;
+    const { content, tags: paramTags, path: explicitPath, overwrite } = params;
 
     // 1. Empty check
     if (!content || content.trim().length === 0) {
@@ -81,14 +82,23 @@ export class KnowledgeStore {
       notePath = resolvePath(title, tags);
     }
 
-    // 6. Avoid collisions — append numeric suffix if file exists
-    notePath = this.avoidCollision(notePath);
+    // 6. Avoid collisions — append numeric suffix if file exists (unless overwriting)
+    if (!overwrite) {
+      notePath = this.avoidCollision(notePath);
+    }
 
-    // 7. Serialize final markdown
+    // 7. Serialize final markdown — preserve original created timestamp when overwriting
     const now = new Date().toISOString();
+    let originalCreated: string | undefined;
+    if (overwrite && this.fileManager.exists(notePath)) {
+      try {
+        const existing = parseFrontmatter(this.fileManager.read(notePath));
+        originalCreated = existing.frontmatter.created;
+      } catch { /* ignore parse errors on existing file */ }
+    }
     const finalFm: Frontmatter = {
       tags,
-      created: parsed.frontmatter.created || now,
+      created: parsed.frontmatter.created || originalCreated || now,
       updated: now,
     };
     const markdown = serializeFrontmatter(finalFm, parsed.body);

@@ -37,10 +37,18 @@ export function registerKbWriteTool(
         .describe(
           "Optional explicit relative path (e.g. 'AI/MyNote.md'). If omitted, path is derived from title + tags.",
         ),
+      overwrite: z
+        .preprocess(
+          v => v === "true" || v === true,
+          z.boolean().default(false),
+        )
+        .describe(
+          'Set to true to overwrite the existing file at the given path instead of creating a duplicate with a numeric suffix. Requires "path" to be set. Preserves the original "created" timestamp.',
+        ),
     },
-    async ({ content, tags, path: notePath }) => {
+    async ({ content, tags, path: notePath, overwrite }) => {
       try {
-        const result = store.writeNote({ content, tags, path: notePath });
+        const result = store.writeNote({ content, tags, path: notePath, overwrite });
         return {
           content: [
             {
