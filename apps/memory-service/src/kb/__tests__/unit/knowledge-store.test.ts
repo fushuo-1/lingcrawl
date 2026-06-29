@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { applySchema } from "../../../db/migrations.js";
+import { FinancialStore } from "../../../financial/financial-store.js";
 import { FileManager } from "../../file-manager.js";
 import { IndexStore } from "../../index-store.js";
 import { KnowledgeStore } from "../../knowledge-store.js";
@@ -26,13 +27,15 @@ describe("KnowledgeStore", () => {
   let store: KnowledgeStore;
   let fileManager: FileManager;
   let indexStore: IndexStore;
+  let financialStore: FinancialStore;
 
   beforeEach(() => {
     db = createTestDb();
     tmpDir = createTempDir();
     fileManager = new FileManager(tmpDir);
     indexStore = new IndexStore(db);
-    store = new KnowledgeStore({ fileManager, indexStore });
+    financialStore = new FinancialStore(db);
+    store = new KnowledgeStore({ fileManager, indexStore, financialStore });
   });
 
   afterEach(() => {
@@ -159,6 +162,110 @@ describe("KnowledgeStore", () => {
       // Old link should be gone — but note that collision avoidance gives a new path.
       // The old link still exists because we wrote to a different path.
       // This is expected: the original file still has [[Old Target]].
+    });
+  });
+
+  describe("deleteNote", () => {
+    it("deletes a note from disk and index", () => {
+      const { path: notePath } = store.writeNote({
+        content: "# To Delete\n\nBody.",
+        tags: ["AI"],
+      });
+
+      expect(store.deleteNote(notePath)).toBe(true);
+      expect(fileManager.exists(notePath)).toBe(false);
+      expect(indexStore.getNoteMeta(notePath)).toBeNull();
+    });
+
+    it("clears linked financial memory note_path", () => {
+      const { path: notePath } = store.writeNote({
+        content: "# AAPL\n\nBullish.",
+        tags: ["stock"],
+      });
+
+      const memory = financialStore.create({
+        entityType: "opinion",
+        ticker: "AAPL",
+        direction: "bullish",
+        timeHorizon: "medium",
+        confidence: 4,
+        thesis: "Strong earnings",
+        notePath,
+      });
+
+      store.deleteNote(notePath);
+
+      const after = financialStore.getById(memory.id);
+      expect(after).not.toBeNull();
+      expect(after!.notePath).toBeUndefined();
+    });
+
+    it("returns false for non-existent note", () => {
+      expect(store.deleteNote("nonexistent.md")).toBe(false);
+    });
+  });
+
+  describe("syncIndex", () => {
+    it("detects renamed files and updates financial memory note_path", () => {
+      const { path: oldPath } = store.writeNote({
+        content: "# AAPL\n\nBullish thesis.",
+        tags: ["stock"],
+      });
+
+      const memory = financialStore.create({
+        entityType: "opinion",
+        ticker: "AAPL",
+        direction: "bullish",
+        timeHorizon: "medium",
+        confidence: 4,
+        thesis: "Strong earnings",
+        notePath: oldPath,
+      });
+
+      const content = fileManager.read(oldPath);
+      const explicitNewPath = "投资/AAPL-重命名.md";
+      fileManager.delete(oldPath);
+      fileManager.write(explicitNewPath, content);
+
+      const result = store.syncIndex();
+      expect(result.renamed).toBe(1);
+
+      const diskPaths = fileManager.listAllMarkdown().map((e) => e.relativePath);
+      const newPath = diskPaths.find((p) => p.includes("AAPL-重命名"));
+      expect(newPath).toBeDefined();
+
+      expect(indexStore.getNoteMeta(oldPath)).toBeNull();
+      expect(indexStore.getNoteMeta(newPath!)).not.toBeNull();
+
+      const after = financialStore.getById(memory.id);
+      expect(after!.notePath).toBe(newPath);
+    });
+
+    it("detects deleted files and clears financial memory note_path", () => {
+      const { path: notePath } = store.writeNote({
+        content: "# AAPL\n\nBullish thesis.",
+        tags: ["stock"],
+      });
+
+      const memory = financialStore.create({
+        entityType: "opinion",
+        ticker: "AAPL",
+        direction: "bullish",
+        timeHorizon: "medium",
+        confidence: 4,
+        thesis: "Strong earnings",
+        notePath,
+      });
+
+      fileManager.delete(notePath);
+
+      const result = store.syncIndex();
+      expect(result.removed).toBe(1);
+
+      expect(indexStore.getNoteMeta(notePath)).toBeNull();
+
+      const after = financialStore.getById(memory.id);
+      expect(after!.notePath).toBeUndefined();
     });
   });
 

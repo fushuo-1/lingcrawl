@@ -12,12 +12,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type Database from "better-sqlite3";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const moduleFilename = fileURLToPath(import.meta.url);
+const moduleDirname = dirname(moduleFilename);
 
 /** Resolve the absolute path to `schema.sql` next to this compiled module. */
 export function getSchemaPath(): string {
-  return join(__dirname, "schema.sql");
+  return join(moduleDirname, "schema.sql");
 }
 
 /** Read the raw schema DDL from disk. */

@@ -16,6 +16,7 @@ import { getDb } from "../db/client.js";
 import { FileManager } from "../kb/file-manager.js";
 import { IndexStore } from "../kb/index-store.js";
 import { KnowledgeStore } from "../kb/knowledge-store.js";
+import { registerKbDeleteTool } from "./tools/kb-delete.js";
 import { registerKbListTool } from "./tools/kb-list.js";
 import { registerKbLinkTool } from "./tools/kb-link.js";
 import { registerKbReadTool } from "./tools/kb-read.js";
@@ -23,6 +24,12 @@ import { registerKbSearchTool } from "./tools/kb-search.js";
 import { registerKbSyncTool } from "./tools/kb-sync.js";
 import { registerKbWriteTool } from "./tools/kb-write.js";
 import { registerKbResources } from "./resources.js";
+import { registerFinMemoryDeleteTool } from "./tools/fin-memory-delete.js";
+import { registerFinMemoryLinkNoteTool } from "./tools/fin-memory-link-note.js";
+import { registerFinMemoryReadTool } from "./tools/fin-memory-read.js";
+import { registerFinMemorySearchTool } from "./tools/fin-memory-search.js";
+import { registerFinMemoryWriteTool } from "./tools/fin-memory-write.js";
+import { FinancialStore } from "../financial/financial-store.js";
 
 export interface MemoryMcpServer {
   /** The McpServer instance — pass to `transport.ts` to wire HTTP. */
@@ -57,8 +64,12 @@ export function createMemoryMcpServer(
         "Knowledge base for AI agents. Use kb_write to save notes, " +
         "kb_read to retrieve them, kb_search for full-text search, " +
         "kb_list to browse, kb_link for backlinks and broken links, " +
-        "and kb_sync to re-index after external file changes. " +
-        "Read kb://recent and kb://index resources for session context.",
+        "kb_delete to remove notes, and kb_sync to re-index after external file changes. " +
+        "Read kb://recent and kb://index resources for session context. " +
+        "Financial memories: use fin_memory_write to record opinions, strategies, " +
+        "positions, and lessons; fin_memory_read to retrieve by id; " +
+        "fin_memory_search to filter and search; fin_memory_delete to remove; " +
+        "fin_memory_link_note to link/unlink a knowledge-base note.",
     },
   );
 
@@ -68,7 +79,12 @@ export function createMemoryMcpServer(
   // Knowledge Base
   const fileManager = new FileManager(config.KB_DATA_DIR);
   const kbIndexStore = new IndexStore(db);
-  const knowledgeStore = new KnowledgeStore({ fileManager, indexStore: kbIndexStore });
+  const financialStore = new FinancialStore(db);
+  const knowledgeStore = new KnowledgeStore({
+    fileManager,
+    indexStore: kbIndexStore,
+    financialStore,
+  });
 
   registerKbWriteTool(server, knowledgeStore);
   registerKbReadTool(server, knowledgeStore);
@@ -76,7 +92,15 @@ export function createMemoryMcpServer(
   registerKbListTool(server, knowledgeStore);
   registerKbLinkTool(server, knowledgeStore);
   registerKbSyncTool(server, knowledgeStore);
+  registerKbDeleteTool(server, knowledgeStore);
   registerKbResources(server, { indexStore: kbIndexStore });
+
+  // Financial memories
+  registerFinMemoryWriteTool(server, financialStore);
+  registerFinMemoryReadTool(server, financialStore);
+  registerFinMemorySearchTool(server, financialStore);
+  registerFinMemoryDeleteTool(server, financialStore);
+  registerFinMemoryLinkNoteTool(server, financialStore);
 
   return {
     server,
