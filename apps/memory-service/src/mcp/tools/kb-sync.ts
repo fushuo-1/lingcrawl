@@ -65,10 +65,12 @@ export function registerKbSyncTool(
                   added: result.added,
                   updated: result.updated,
                   removed: result.removed,
-                  total: result.added + result.updated + result.removed,
+                  renamed: result.renamed,
+                  total: result.added + result.updated + result.removed + result.renamed,
                   ...(dryRun && {
                     addedFiles: result.addedPaths,
                     removedFiles: result.removedPaths,
+                    renamedFiles: result.renamedPaths,
                   }),
                 },
                 null,

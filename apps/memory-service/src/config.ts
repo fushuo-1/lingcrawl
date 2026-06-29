@@ -5,11 +5,11 @@ import os from "os";
 import fs from "fs";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const moduleFilename = fileURLToPath(import.meta.url);
+const moduleDirname = path.dirname(moduleFilename);
 
 // Fallback: load .env from repo root when running from apps/memory-service/
-configDotenv({ path: path.resolve(__dirname, "..", "..", "..", ".env"), override: false });
+configDotenv({ path: path.resolve(moduleDirname, "..", "..", "..", ".env"), override: false });
 
 import { z } from "zod";
 
@@ -27,7 +27,7 @@ const configSchema = z.object({
 });
 
 /* Parse — fail-fast with a readable error */
-function parseConfig(env: NodeJS.ProcessEnv) {
+export function parseConfig(env: NodeJS.ProcessEnv) {
   const result = configSchema.safeParse(env);
   if (!result.success) {
     const issues = result.error.issues

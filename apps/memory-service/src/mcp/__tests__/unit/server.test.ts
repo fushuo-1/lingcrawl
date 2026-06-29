@@ -79,10 +79,16 @@ describe("MCP server — tools/list", () => {
   });
   afterEach(() => fixtures.close());
 
-  it("registers exactly 6 knowledge-base tools", async () => {
+  it("registers exactly 12 tools (7 kb + 5 fin)", async () => {
     const { tools } = await fixtures.client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual([
+      "fin_memory_delete",
+      "fin_memory_link_note",
+      "fin_memory_read",
+      "fin_memory_search",
+      "fin_memory_write",
+      "kb_delete",
       "kb_link",
       "kb_list",
       "kb_read",

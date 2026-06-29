@@ -8,8 +8,11 @@
  * and is exercised by the snips/E2E layer instead.
  */
 import type Database from "better-sqlite3";
-import { _initDb, closeDb, getDb } from "../client.js";
-import { applySchema } from "../migrations.js";
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs";
+import { _initDb, closeDb, getDb } from "../../../db/client.js";
+import { applySchema } from "../../../db/migrations.js";
 
 /** Helper: open a fresh in-memory DB with schema applied. */
 function openMemoryDb(): Database.Database {
@@ -42,9 +45,6 @@ describe("db/client — _initDb", () => {
   });
 
   it("enables WAL journal mode on a real file path", () => {
-    const os = require("node:os") as typeof import("node:os");
-    const path = require("node:path") as typeof import("node:path");
-    const fs = require("node:fs") as typeof import("node:fs");
     const tmpFile = path.join(
       os.tmpdir(),
       `memory-svc-wal-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
@@ -87,6 +87,10 @@ describe("db/client — _initDb", () => {
       .prepare(
         "SELECT type, name FROM sqlite_schema " +
           "WHERE name NOT LIKE 'sqlite_%' " +
+          "AND name NOT LIKE '%_config' " +
+          "AND name NOT LIKE '%_data' " +
+          "AND name NOT LIKE '%_docsize' " +
+          "AND name NOT LIKE '%_idx' " +
           "ORDER BY type, name",
       )
       .all() as Array<{ type: string; name: string }>;
@@ -98,23 +102,29 @@ describe("db/client — _initDb", () => {
 
     expect(tables).toEqual(
       expect.arrayContaining([
-        "memory_entries",
-        "sessions",
         "exchanges",
+        "exchanges_fts",
+        "financial_memories",
+        "links",
+        "memory_entries",
+        "notes",
         "pending_memories",
-        "exchanges_fts", // FTS5 virtual table is reported as type='table'
+        "sessions",
       ]),
     );
-    expect(tables).toHaveLength(5);
+    expect(tables).toHaveLength(9);
 
     expect(triggers).toEqual(
       expect.arrayContaining([
         "exchanges_ai",
         "exchanges_ad",
         "exchanges_au",
+        "notes_ai",
+        "notes_ad",
+        "notes_au",
       ]),
     );
-    expect(triggers).toHaveLength(3);
+    expect(triggers).toHaveLength(6);
   });
 
   it("creates the idx_memory_entries_target index", () => {

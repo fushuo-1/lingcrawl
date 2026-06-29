@@ -15,6 +15,7 @@ export interface NoteMeta {
   path: string;
   title: string;
   tags: string[];
+  content: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -39,6 +40,7 @@ function rowToNoteMeta(row: Record<string, unknown>): NoteMeta {
     path: row.path as string,
     title: row.title as string,
     tags: JSON.parse(row.tags as string) as string[],
+    content: row.content as string,
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };
@@ -81,6 +83,22 @@ export class IndexStore {
       .prepare("DELETE FROM notes WHERE path = ?")
       .run(path);
     return info.changes > 0;
+  }
+
+  updateNotePath(oldPath: string, newPath: string): void {
+    this.db
+      .prepare("UPDATE notes SET path = ? WHERE path = ?")
+      .run(newPath, oldPath);
+    this.db
+      .prepare("UPDATE links SET source_path = ? WHERE source_path = ?")
+      .run(newPath, oldPath);
+  }
+
+  listAllNotes(): NoteMeta[] {
+    const rows = this.db
+      .prepare("SELECT * FROM notes ORDER BY path")
+      .all() as Record<string, unknown>[];
+    return rows.map(rowToNoteMeta);
   }
 
   getNoteMeta(path: string): NoteMeta | null {

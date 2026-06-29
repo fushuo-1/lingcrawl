@@ -5,6 +5,7 @@
  * to provide writeNote / readNote with full frontmatter handling,
  * wikilink extraction, and duplicate-path avoidance.
  */
+import type { FinancialStore } from "../financial/financial-store.js";
 import path from "node:path";
 import type { FileManager } from "./file-manager.js";
 import type { IndexStore, Link, NoteMeta } from "./index-store.js";
@@ -32,10 +33,16 @@ export interface ReadResult {
 export class KnowledgeStore {
   private fileManager: FileManager;
   private indexStore: IndexStore;
+  private financialStore?: FinancialStore;
 
-  constructor(deps: { fileManager: FileManager; indexStore: IndexStore }) {
+  constructor(deps: {
+    fileManager: FileManager;
+    indexStore: IndexStore;
+    financialStore?: FinancialStore;
+  }) {
     this.fileManager = deps.fileManager;
     this.indexStore = deps.indexStore;
+    this.financialStore = deps.financialStore;
   }
 
   /**
@@ -172,8 +179,23 @@ export class KnowledgeStore {
   }
 
   /**
+   * Delete a note from the knowledge base.
+   * Removes the file, the index entry, links, and clears any financial memory note_path.
+   */
+  deleteNote(notePath: string): boolean {
+    const existed = this.fileManager.exists(notePath);
+    if (existed) {
+      this.fileManager.delete(notePath);
+    }
+    const indexed = this.indexStore.deleteNote(notePath);
+    this.indexStore.removeLinksForNote(notePath);
+    this.financialStore?.clearNotePath(notePath);
+    return existed || indexed;
+  }
+
+  /**
    * Sync the SQLite index with the actual files on disk.
-   * Detects added, updated, and removed notes.
+   * Detects added, updated, removed, and renamed notes.
    *
    * When dryRun is true, returns detailed file lists without modifying anything.
    */
@@ -181,59 +203,84 @@ export class KnowledgeStore {
     added: number;
     updated: number;
     removed: number;
+    renamed: number;
     addedPaths?: string[];
     removedPaths?: string[];
+    renamedPaths?: Array<{ oldPath: string; newPath: string }>;
   } {
-    const indexed = new Map(this.indexStore.listNotes().map(n => [n.path, n]));
+    const indexedList = this.indexStore.listAllNotes();
+    const indexedByPath = new Map(indexedList.map((n) => [n.path, n]));
+    const indexedByContent = new Map(indexedList.map((n) => [n.content, n]));
     const onDisk = this.fileManager.listAllMarkdown();
 
     const addedPaths: string[] = [];
     const removedPaths: string[] = [];
-    let added = 0, updated = 0, removed = 0;
+    const renamedPaths: Array<{ oldPath: string; newPath: string }> = [];
+    let added = 0,
+      updated = 0,
+      removed = 0,
+      renamed = 0;
 
-    // Check files on disk
+    // Detect renames and updates among files on disk
     for (const { relativePath } of onDisk) {
       const raw = this.fileManager.read(relativePath);
       const parsed = parseFrontmatter(raw);
       const title = this.extractTitle(parsed.body);
       const tags = parsed.frontmatter.tags ?? [];
 
-      const existing = indexed.get(relativePath);
-      if (!existing) {
-        // New file not in index
-        addedPaths.push(relativePath);
-        if (!dryRun) {
-          this.indexStore.upsertNote({ path: relativePath, title, tags, content: raw });
-          this.indexStore.removeLinksForNote(relativePath);
-          this.updateLinks(relativePath, parsed.body);
-        }
-        added++;
-      } else {
-        // Content changed — update index
+      if (indexedByPath.has(relativePath)) {
+        // Existing path — just update index
         if (!dryRun) {
           this.indexStore.upsertNote({ path: relativePath, title, tags, content: raw });
           this.indexStore.removeLinksForNote(relativePath);
           this.updateLinks(relativePath, parsed.body);
         }
         updated++;
+        indexedByPath.delete(relativePath);
+        continue;
       }
 
-      indexed.delete(relativePath);
+      // Path not in index — could be a new file or a renamed file
+      const renamedFrom = indexedByContent.get(raw);
+      if (renamedFrom && renamedFrom.path !== relativePath) {
+        // Rename detected: same content, different path
+        renamedPaths.push({ oldPath: renamedFrom.path, newPath: relativePath });
+        if (!dryRun) {
+          this.indexStore.updateNotePath(renamedFrom.path, relativePath);
+          this.indexStore.upsertNote({ path: relativePath, title, tags, content: raw });
+          this.indexStore.removeLinksForNote(relativePath);
+          this.updateLinks(relativePath, parsed.body);
+          this.financialStore?.updateNotePath(renamedFrom.path, relativePath);
+        }
+        renamed++;
+        indexedByPath.delete(renamedFrom.path);
+        continue;
+      }
+
+      // New file
+      addedPaths.push(relativePath);
+      if (!dryRun) {
+        this.indexStore.upsertNote({ path: relativePath, title, tags, content: raw });
+        this.indexStore.removeLinksForNote(relativePath);
+        this.updateLinks(relativePath, parsed.body);
+      }
+      added++;
     }
 
-    // Remaining entries in indexed are files deleted from disk
-    for (const [notePath] of indexed) {
+    // Remaining entries in indexedByPath are files deleted from disk
+    for (const [notePath] of indexedByPath) {
       removedPaths.push(notePath);
       if (!dryRun) {
         this.indexStore.deleteNote(notePath);
         this.indexStore.removeLinksForNote(notePath);
+        this.financialStore?.clearNotePath(notePath);
       }
       removed++;
     }
 
     return dryRun
-      ? { added, updated, removed, addedPaths, removedPaths }
-      : { added, updated, removed };
+      ? { added, updated, removed, renamed, addedPaths, removedPaths, renamedPaths }
+      : { added, updated, removed, renamed };
   }
 
   /* ---- Helpers ---- */

@@ -9,7 +9,7 @@
  *   - FTS5 triggers keep the mirror in sync on INSERT / UPDATE / DELETE.
  */
 import type Database from "better-sqlite3";
-import { _initDb } from "../client.js";
+import { _initDb } from "../../../db/client.js";
 
 function openDb(): Database.Database {
   return _initDb(":memory:");
@@ -46,6 +46,10 @@ describe("db/schema — structural presence", () => {
         "exchanges",
         "exchanges_fts",
         "pending_memories",
+        "notes",
+        "notes_fts",
+        "links",
+        "financial_memories",
       ]),
     );
   });
@@ -112,6 +116,50 @@ describe("db/schema — CHECK constraints", () => {
           "INSERT INTO pending_memories (content, target, confidence, status) VALUES (?, ?, ?, ?)",
         )
         .run("x", "memory", 0.9, "done"),
+    ).toThrow(/CHECK/);
+  });
+
+  it("financial_memories rejects entity_type values outside {opinion, strategy, position, lesson}", () => {
+    db = openDb();
+    expect(() =>
+      db
+        .prepare(
+          "INSERT INTO financial_memories (id, entity_type) VALUES (?, ?)",
+        )
+        .run("test-id", "unknown"),
+    ).toThrow(/CHECK/);
+  });
+
+  it("financial_memories rejects direction values outside {bullish, bearish, neutral}", () => {
+    db = openDb();
+    expect(() =>
+      db
+        .prepare(
+          "INSERT INTO financial_memories (id, entity_type, direction) VALUES (?, ?, ?)",
+        )
+        .run("test-id", "opinion", "up"),
+    ).toThrow(/CHECK/);
+  });
+
+  it("financial_memories rejects time_horizon values outside {short, medium, long}", () => {
+    db = openDb();
+    expect(() =>
+      db
+        .prepare(
+          "INSERT INTO financial_memories (id, entity_type, time_horizon) VALUES (?, ?, ?)",
+        )
+        .run("test-id", "opinion", "forever"),
+    ).toThrow(/CHECK/);
+  });
+
+  it("financial_memories rejects confidence outside 1-5", () => {
+    db = openDb();
+    expect(() =>
+      db
+        .prepare(
+          "INSERT INTO financial_memories (id, entity_type, confidence) VALUES (?, ?, ?)",
+        )
+        .run("test-id", "opinion", 10),
     ).toThrow(/CHECK/);
   });
 });
