@@ -13,6 +13,7 @@ const CATEGORY_TAGS: Record<string, string> = {
   "项目": "项目",
   "学习笔记": "学习笔记",
   "随想": "随想",
+  "投资": "投资",
 };
 
 const UNSAFE_CHARS = /[\\/:*?"<>|]/g;

@@ -121,45 +121,50 @@ describe("db/schema — CHECK constraints", () => {
 
   it("financial_memories rejects entity_type values outside {opinion, strategy, position, lesson}", () => {
     db = openDb();
+    // 插入父记录以满足 FK 约束
+    db.prepare("INSERT INTO notes (path, title, content) VALUES (?, ?, ?)").run("test/note.md", "title", "content");
     expect(() =>
       db
         .prepare(
-          "INSERT INTO financial_memories (id, entity_type) VALUES (?, ?)",
+          "INSERT INTO financial_memories (note_path, entity_type) VALUES (?, ?)",
         )
-        .run("test-id", "unknown"),
+        .run("test/note.md", "unknown"),
     ).toThrow(/CHECK/);
   });
 
   it("financial_memories rejects direction values outside {bullish, bearish, neutral}", () => {
     db = openDb();
+    db.prepare("INSERT INTO notes (path, title, content) VALUES (?, ?, ?)").run("test/note2.md", "title", "content");
     expect(() =>
       db
         .prepare(
-          "INSERT INTO financial_memories (id, entity_type, direction) VALUES (?, ?, ?)",
+          "INSERT INTO financial_memories (note_path, entity_type, direction) VALUES (?, ?, ?)",
         )
-        .run("test-id", "opinion", "up"),
+        .run("test/note2.md", "opinion", "up"),
     ).toThrow(/CHECK/);
   });
 
   it("financial_memories rejects time_horizon values outside {short, medium, long}", () => {
     db = openDb();
+    db.prepare("INSERT INTO notes (path, title, content) VALUES (?, ?, ?)").run("test/note3.md", "title", "content");
     expect(() =>
       db
         .prepare(
-          "INSERT INTO financial_memories (id, entity_type, time_horizon) VALUES (?, ?, ?)",
+          "INSERT INTO financial_memories (note_path, entity_type, time_horizon) VALUES (?, ?, ?)",
         )
-        .run("test-id", "opinion", "forever"),
+        .run("test/note3.md", "opinion", "forever"),
     ).toThrow(/CHECK/);
   });
 
   it("financial_memories rejects confidence outside 1-5", () => {
     db = openDb();
+    db.prepare("INSERT INTO notes (path, title, content) VALUES (?, ?, ?)").run("test/note4.md", "title", "content");
     expect(() =>
       db
         .prepare(
-          "INSERT INTO financial_memories (id, entity_type, confidence) VALUES (?, ?, ?)",
+          "INSERT INTO financial_memories (note_path, entity_type, confidence) VALUES (?, ?, ?)",
         )
-        .run("test-id", "opinion", 10),
+        .run("test/note4.md", "opinion", 10),
     ).toThrow(/CHECK/);
   });
 });
