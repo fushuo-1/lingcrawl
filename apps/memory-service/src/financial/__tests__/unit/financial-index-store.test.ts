@@ -240,13 +240,13 @@ describe("FinancialIndexStore.scanStaleness", () => {
     store.upsert("投资/stale-position.md", {
       entityType: "position",
       ticker: "TSLA",
-      updatedAt: now - 60 * 86400, // 60 天前，position soft=30 hard=90 → stale
+      updatedAt: now - 20 * 86400, // 20 天前，position soft=14 hard=28 → stale
     });
 
-    insertNote("投资/archived-lesson.md");
-    store.upsert("投资/archived-lesson.md", {
-      entityType: "lesson",
-      updatedAt: now - 800 * 86400, // 800 天前，lesson hard=730 → archived
+    insertNote("投资/archived-strategy.md");
+    store.upsert("投资/archived-strategy.md", {
+      entityType: "strategy",
+      updatedAt: now - 200 * 86400, // 200 天前，strategy hard=180 → archived
     });
 
     const results = store.scanStaleness();
@@ -255,7 +255,7 @@ describe("FinancialIndexStore.scanStaleness", () => {
     const byPath = Object.fromEntries(results.map((r) => [r.notePath, r.stage]));
     expect(byPath["投资/active-opinion.md"]).toBe("active");
     expect(byPath["投资/stale-position.md"]).toBe("stale");
-    expect(byPath["投资/archived-lesson.md"]).toBe("archived");
+    expect(byPath["投资/archived-strategy.md"]).toBe("archived");
   });
 
   it("排序顺序: archived > stale > active，同 stage 内 daysStale 降序", () => {
@@ -279,20 +279,20 @@ describe("FinancialIndexStore.scanStaleness", () => {
     store.upsert("投资/stale-recent.md", {
       entityType: "position",
       ticker: "C",
-      updatedAt: now - 40 * 86400,
+      updatedAt: now - 18 * 86400, // 18 天前，position soft=14 → stale
     });
 
     insertNote("投资/stale-old.md");
     store.upsert("投资/stale-old.md", {
       entityType: "position",
       ticker: "D",
-      updatedAt: now - 80 * 86400,
+      updatedAt: now - 25 * 86400, // 25 天前，position soft=14 hard=28 → stale
     });
 
     insertNote("投资/archived.md");
     store.upsert("投资/archived.md", {
-      entityType: "lesson",
-      updatedAt: now - 800 * 86400,
+      entityType: "strategy",
+      updatedAt: now - 200 * 86400, // 200 天前，strategy hard=180 → archived
     });
 
     const results = store.scanStaleness();
