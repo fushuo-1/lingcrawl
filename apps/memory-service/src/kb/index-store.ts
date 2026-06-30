@@ -112,7 +112,7 @@ export class IndexStore {
 
   searchNotes(
     query: string,
-    filters?: { tags?: string[]; pathPrefix?: string; limit?: number },
+    filters?: { tags?: string[]; pathPrefix?: string; limit?: number; excludeArchived?: boolean },
   ): SearchHit[] {
     const limit = filters?.limit ?? 50;
     const conditions: string[] = [];
@@ -134,6 +134,10 @@ export class IndexStore {
       for (const t of filters.tags) {
         params.push(`%"${t}"%`);
       }
+    }
+    // 排除 _archived/ 路径下的笔记
+    if (filters?.excludeArchived) {
+      conditions.push("n.path NOT LIKE '%/_archived/%'");
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";

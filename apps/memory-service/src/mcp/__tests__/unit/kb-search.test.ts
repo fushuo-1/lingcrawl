@@ -130,6 +130,46 @@ describe("kb_search — limit parameter", () => {
   });
 });
 
+/* ----- excludeArchived filter ----- */
+
+describe("kb_search — excludeArchived filter", () => {
+  it("默认不排除 _archived/ 路径", () => {
+    store.upsertNote({
+      path: "tech/_archived/old-redis.md",
+      title: "Old Redis Notes",
+      tags: ["redis"],
+      content: "Archived Redis notes from legacy project.",
+    });
+    const hits = store.searchNotes("redis OR archived");
+    const paths = hits.map((h) => h.path);
+    expect(paths).toContain("tech/_archived/old-redis.md");
+  });
+
+  it("excludeArchived=true 排除 _archived/ 路径", () => {
+    store.upsertNote({
+      path: "tech/_archived/old-redis.md",
+      title: "Old Redis Notes",
+      tags: ["redis"],
+      content: "Archived Redis notes from legacy project.",
+    });
+    const hits = store.searchNotes("redis OR archived", { excludeArchived: true });
+    const paths = hits.map((h) => h.path);
+    expect(paths).not.toContain("tech/_archived/old-redis.md");
+  });
+
+  it("excludeArchived=false 不排除 _archived/ 路径", () => {
+    store.upsertNote({
+      path: "tech/_archived/old-redis.md",
+      title: "Old Redis Notes",
+      tags: ["redis"],
+      content: "Archived Redis notes from legacy project.",
+    });
+    const hits = store.searchNotes("redis OR archived", { excludeArchived: false });
+    const paths = hits.map((h) => h.path);
+    expect(paths).toContain("tech/_archived/old-redis.md");
+  });
+});
+
 /* ----- MCP tool adapter (via server integration) ----- */
 
 describe("kb_search — MCP tool integration", () => {
