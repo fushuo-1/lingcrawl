@@ -39,11 +39,7 @@ export interface FinancialMemory {
 
   /* ---- position ---- */
   positionStatus?: PositionStatus;
-  costBasis?: number;
   quantity?: number;
-  targetPrice?: number;
-  stopLoss?: number;
-  positionSizePercent?: number;
 
   /* ---- lesson ---- */
   title?: string;
@@ -79,11 +75,7 @@ export interface CreateFinancialMemoryInput {
 
   /* position */
   positionStatus?: PositionStatus;
-  costBasis?: number;
   quantity?: number;
-  targetPrice?: number;
-  stopLoss?: number;
-  positionSizePercent?: number;
 
   /* lesson */
   title?: string;
@@ -105,11 +97,7 @@ export interface UpdateFinancialMemoryInput {
   assetClass?: AssetClass;
   strategyStatus?: StrategyStatus;
   positionStatus?: PositionStatus;
-  costBasis?: number;
   quantity?: number;
-  targetPrice?: number;
-  stopLoss?: number;
-  positionSizePercent?: number;
   title?: string;
   lessonCategory?: LessonCategory;
   tags?: string[];

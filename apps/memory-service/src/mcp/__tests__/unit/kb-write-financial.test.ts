@@ -167,7 +167,7 @@ describe("kb_write 金融记忆 — strategy", () => {
 /* ----- position ----- */
 
 describe("kb_write 金融记忆 — position", () => {
-  it("写入 position + 必填字段 → financial_memories 中 cost_basis/quantity 正确", () => {
+  it("写入 position + 必填字段 → financial_memories 中 quantity/position_status 正确", () => {
     const content = [
       "---",
       "tags: [投资]",
@@ -177,9 +177,6 @@ describe("kb_write 金融记忆 — position", () => {
       "ticker: TSLA",
       "position_status: holding",
       "quantity: 100",
-      "cost_basis: 180.5",
-      "target_price: 250",
-      "stop_loss: 150",
       "---",
       "",
       "# TSLA 持仓",
@@ -195,10 +192,7 @@ describe("kb_write 金融记忆 — position", () => {
     const finRow = queryFinancial("投资/TSLA-持仓.md");
     expect(finRow).toBeDefined();
     expect(finRow!.entity_type).toBe("position");
-    expect(finRow!.cost_basis).toBe(180.5);
     expect(finRow!.quantity).toBe(100);
-    expect(finRow!.target_price).toBe(250);
-    expect(finRow!.stop_loss).toBe(150);
     expect(finRow!.position_status).toBe("holding");
   });
 });

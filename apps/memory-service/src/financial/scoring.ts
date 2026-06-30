@@ -43,13 +43,9 @@ function computeConfidenceOrSize(memory: FinancialMemory): number {
         watching: 0.8,
         closed: 0.5,
       };
-      const multiplier = memory.positionStatus
+      return memory.positionStatus
         ? statusMultiplier[memory.positionStatus] ?? 0.3
         : 0.3;
-      const sizeBonus = memory.positionSizePercent
-        ? memory.positionSizePercent / 100
-        : 0;
-      return Math.min(1, multiplier * (1 + sizeBonus));
     }
     case "strategy": {
       const statusMap: Record<string, number> = {

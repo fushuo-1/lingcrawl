@@ -22,11 +22,7 @@ export interface FinancialSlimFields {
   assetClass?: string;
   strategyStatus?: string;
   positionStatus?: string;
-  costBasis?: number;
   quantity?: number;
-  targetPrice?: number;
-  stopLoss?: number;
-  positionSizePercent?: number;
   lessonCategory?: string;
   tags?: string[];
   createdAt?: number;
@@ -56,11 +52,7 @@ export interface SearchResultItem {
   assetClass?: string;
   strategyStatus?: string;
   positionStatus?: string;
-  costBasis?: number;
   quantity?: number;
-  targetPrice?: number;
-  stopLoss?: number;
-  positionSizePercent?: number;
   lessonCategory?: string;
   tags: string[];
   createdAt: number;
@@ -83,11 +75,7 @@ function rowToResult(row: Record<string, unknown>): SearchResultItem {
     assetClass: row.asset_class as string | undefined,
     strategyStatus: row.strategy_status as string | undefined,
     positionStatus: row.position_status as string | undefined,
-    costBasis: row.cost_basis as number | undefined,
     quantity: row.quantity as number | undefined,
-    targetPrice: row.target_price as number | undefined,
-    stopLoss: row.stop_loss as number | undefined,
-    positionSizePercent: row.position_size_percent as number | undefined,
     lessonCategory: row.lesson_category as string | undefined,
     tags: JSON.parse((row.tags as string) || "[]") as string[],
     createdAt: row.created_at as number,
@@ -115,10 +103,10 @@ export class FinancialIndexStore {
       INSERT OR REPLACE INTO financial_memories (
         note_path, entity_type, ticker, market, direction, time_horizon,
         confidence, asset_class, strategy_status, position_status,
-        cost_basis, quantity, target_price, stop_loss, position_size_percent,
+        quantity,
         lesson_category, tags, created_at, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )
     `;
 
@@ -135,11 +123,7 @@ export class FinancialIndexStore {
       fields.assetClass ?? null,
       fields.strategyStatus ?? null,
       fields.positionStatus ?? null,
-      fields.costBasis ?? null,
       fields.quantity ?? null,
-      fields.targetPrice ?? null,
-      fields.stopLoss ?? null,
-      fields.positionSizePercent ?? null,
       fields.lessonCategory ?? null,
       tags,
       fields.createdAt ?? now,
@@ -234,11 +218,7 @@ export class FinancialIndexStore {
         assetClass: item.assetClass as FinancialMemory["assetClass"],
         strategyStatus: item.strategyStatus as FinancialMemory["strategyStatus"],
         positionStatus: item.positionStatus as FinancialMemory["positionStatus"],
-        costBasis: item.costBasis,
         quantity: item.quantity,
-        targetPrice: item.targetPrice,
-        stopLoss: item.stopLoss,
-        positionSizePercent: item.positionSizePercent,
         lessonCategory: item.lessonCategory as FinancialMemory["lessonCategory"],
         tags: item.tags,
         createdAt: item.createdAt,
