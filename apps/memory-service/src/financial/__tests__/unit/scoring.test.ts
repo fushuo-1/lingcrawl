@@ -75,11 +75,10 @@ describe("scoreMemory", () => {
     const memory = makeMemory({
       entityType: "opinion",
       ticker: "AAPL",
-      thesis: "Strong earnings growth",
       updatedAt: now,
     });
 
-    const withQuery = scoreMemory(memory, "AAPL earnings", now).relevanceScore;
+    const withQuery = scoreMemory(memory, "AAPL", now).relevanceScore;
     const withoutQuery = scoreMemory(memory, undefined, now).relevanceScore;
     expect(withQuery).toBeGreaterThanOrEqual(withoutQuery);
   });

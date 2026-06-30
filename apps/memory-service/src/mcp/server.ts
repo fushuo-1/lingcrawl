@@ -24,12 +24,6 @@ import { registerKbSearchTool } from "./tools/kb-search.js";
 import { registerKbSyncTool } from "./tools/kb-sync.js";
 import { registerKbWriteTool } from "./tools/kb-write.js";
 import { registerKbResources } from "./resources.js";
-import { registerFinMemoryDeleteTool } from "./tools/fin-memory-delete.js";
-import { registerFinMemoryLinkNoteTool } from "./tools/fin-memory-link-note.js";
-import { registerFinMemoryReadTool } from "./tools/fin-memory-read.js";
-import { registerFinMemorySearchTool } from "./tools/fin-memory-search.js";
-import { registerFinMemoryWriteTool } from "./tools/fin-memory-write.js";
-import { FinancialStore } from "../financial/financial-store.js";
 import { FinancialIndexStore } from "../financial/financial-index-store.js";
 
 export interface MemoryMcpServer {
@@ -67,10 +61,9 @@ export function createMemoryMcpServer(
         "kb_list to browse, kb_link for backlinks and broken links, " +
         "kb_delete to remove notes, and kb_sync to re-index after external file changes. " +
         "Read kb://recent and kb://index resources for session context. " +
-        "Financial memories: use fin_memory_write to record opinions, strategies, " +
-        "positions, and lessons; fin_memory_read to retrieve by id; " +
-        "fin_memory_search to filter and search; fin_memory_delete to remove; " +
-        "fin_memory_link_note to link/unlink a knowledge-base note.",
+        "Financial memories: write via kb_write with entity_type frontmatter fields " +
+        "(entity_type, ticker, direction, time_horizon, confidence, etc.); " +
+        "search via kb_search with entity_type/ticker/direction/market filters.",
     },
   );
 
@@ -80,7 +73,6 @@ export function createMemoryMcpServer(
   // Knowledge Base
   const fileManager = new FileManager(config.KB_DATA_DIR);
   const kbIndexStore = new IndexStore(db);
-  const financialStore = new FinancialStore(db);
   const financialIndexStore = new FinancialIndexStore(db);
   const knowledgeStore = new KnowledgeStore({
     fileManager,
@@ -96,13 +88,6 @@ export function createMemoryMcpServer(
   registerKbSyncTool(server, knowledgeStore);
   registerKbDeleteTool(server, knowledgeStore);
   registerKbResources(server, { indexStore: kbIndexStore });
-
-  // Financial memories
-  registerFinMemoryWriteTool(server, financialStore);
-  registerFinMemoryReadTool(server, financialStore);
-  registerFinMemorySearchTool(server, financialStore);
-  registerFinMemoryDeleteTool(server, financialStore);
-  registerFinMemoryLinkNoteTool(server, financialStore);
 
   return {
     server,

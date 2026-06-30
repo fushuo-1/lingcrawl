@@ -12,7 +12,7 @@ import { FileManager } from "../../../kb/file-manager.js";
 import { IndexStore } from "../../../kb/index-store.js";
 import { KnowledgeStore } from "../../../kb/knowledge-store.js";
 import { NoteNotFoundError } from "../../../kb/errors.js";
-import { FinancialStore } from "../../../financial/financial-store.js";
+import { FinancialIndexStore } from "../../../financial/financial-index-store.js";
 
 function createTestDb(): Database.Database {
   const db = new Database(":memory:");
@@ -32,17 +32,14 @@ describe("kb_read 金融记忆读取 (issue #109)", () => {
   let db: Database.Database;
   let tmpDir: string;
   let store: KnowledgeStore;
-  let fileManager: FileManager;
-  let indexStore: IndexStore;
-  let financialStore: FinancialStore;
 
   beforeEach(() => {
     db = createTestDb();
     tmpDir = createTempDir();
-    fileManager = new FileManager(tmpDir);
-    indexStore = new IndexStore(db);
-    financialStore = new FinancialStore(db);
-    store = new KnowledgeStore({ fileManager, indexStore, financialStore });
+    const fileManager = new FileManager(tmpDir);
+    const indexStore = new IndexStore(db);
+    const financialIndexStore = new FinancialIndexStore(db);
+    store = new KnowledgeStore({ fileManager, indexStore, financialIndexStore });
   });
 
   afterEach(() => {
@@ -50,111 +47,58 @@ describe("kb_read 金融记忆读取 (issue #109)", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("读取 opinion 金融记忆 → frontmatter 包含金融字段", () => {
-    // 写入带金融 frontmatter 的笔记
+  it("读取 opinion 金融记忆 → frontmatter 包含 entity_type, ticker, direction 等", () => {
     const content = [
       "---",
-      "tags: [投资, 灵鉴]",
-      "created: 2025-06-01T00:00:00.000Z",
-      "updated: 2025-06-01T00:00:00.000Z",
+      "tags: [投资, AAPL]",
       "entity_type: opinion",
       "ticker: AAPL",
       "direction: bullish",
+      "time_horizon: long",
       "confidence: 4",
-      "time_horizon: medium",
       "---",
       "",
-      "# AAPL 看多",
+      "# AAPL 看多观点",
       "",
-      "Apple 季度营收超预期。",
+      "详细分析...",
     ].join("\n");
 
-    const { path: notePath } = store.writeNote({
-      content,
-      path: "投资/AAPL-opinion.md",
-    });
+    store.writeNote({ content, path: "投资/AAPL-看多.md" });
 
-    // 创建对应的金融记忆记录
-    financialStore.create({
-      entityType: "opinion",
-      ticker: "AAPL",
-      direction: "bullish",
-      confidence: 4,
-      timeHorizon: "medium",
-      thesis: "Apple 季度营收超预期",
-      notePath,
-    });
-
-    // 通过 KnowledgeStore.readNote 读取
-    const result = store.readNote(notePath);
-
-    // frontmatter 应包含原始写入的金融字段
-    expect(result.frontmatter.tags).toContain("投资");
-    expect(result.frontmatter.tags).toContain("灵鉴");
-    expect(result.frontmatter.created).toBeTruthy();
-    expect(result.frontmatter.updated).toBeTruthy();
-
-    // body 应包含笔记正文
-    expect(result.body).toContain("# AAPL 看多");
-    expect(result.body).toContain("Apple 季度营收超预期");
-
-    // 确认 financial_memories 表中有对应记录
-    const memories = financialStore.getByNotePath(notePath);
-    expect(memories.length).toBe(1);
-    expect(memories[0].entityType).toBe("opinion");
-    expect(memories[0].ticker).toBe("AAPL");
-    expect(memories[0].direction).toBe("bullish");
-    expect(memories[0].confidence).toBe(4);
-    expect(memories[0].timeHorizon).toBe("medium");
+    const result = store.readNote("投资/AAPL-看多.md");
+    expect(result.frontmatter.entity_type).toBe("opinion");
+    expect(result.frontmatter.ticker).toBe("AAPL");
+    expect(result.frontmatter.direction).toBe("bullish");
+    expect(result.frontmatter.time_horizon).toBe("long");
+    expect(result.frontmatter.confidence).toBe(4);
+    expect(result.body).toContain("# AAPL 看多观点");
   });
 
   it("读取 strategy 记录 → frontmatter 包含 name, asset_class, strategy_status", () => {
     const content = [
       "---",
-      "tags: [投资, 策略]",
-      "created: 2025-05-15T00:00:00.000Z",
-      "updated: 2025-05-15T00:00:00.000Z",
+      "tags: [投资]",
       "entity_type: strategy",
-      "name: 动量突破策略",
+      "name: RSI策略",
       "asset_class: stock",
       "strategy_status: active",
       "---",
       "",
-      "# 动量突破策略",
+      "# RSI 策略",
       "",
-      "基于20日均线突破的趋势跟踪策略。",
+      "策略详情...",
     ].join("\n");
 
-    const { path: notePath } = store.writeNote({
-      content,
-      path: "投资/动量突破策略.md",
-    });
+    store.writeNote({ content, path: "投资/RSI-策略.md" });
 
-    financialStore.create({
-      entityType: "strategy",
-      name: "动量突破策略",
-      assetClass: "stock",
-      strategyStatus: "active",
-      rules: "突破20日均线买入",
-      notePath,
-    });
-
-    const result = store.readNote(notePath);
-
-    expect(result.body).toContain("# 动量突破策略");
-    expect(result.body).toContain("基于20日均线突破的趋势跟踪策略");
-
-    // 确认 financial_memories 中的策略字段
-    const memories = financialStore.getByNotePath(notePath);
-    expect(memories.length).toBe(1);
-    expect(memories[0].entityType).toBe("strategy");
-    expect(memories[0].name).toBe("动量突破策略");
-    expect(memories[0].assetClass).toBe("stock");
-    expect(memories[0].strategyStatus).toBe("active");
+    const result = store.readNote("投资/RSI-策略.md");
+    expect(result.frontmatter.entity_type).toBe("strategy");
+    expect(result.frontmatter.name).toBe("RSI策略");
+    expect(result.frontmatter.asset_class).toBe("stock");
+    expect(result.frontmatter.strategy_status).toBe("active");
   });
 
   it("读取不存在的路径 → 抛出 NoteNotFoundError", () => {
-    expect(() => store.readNote("投资/不存在.md")).toThrow(NoteNotFoundError);
-    expect(() => store.readNote("投资/不存在.md")).toThrow(/Note not found/);
+    expect(() => store.readNote("不存在/路径.md")).toThrow(NoteNotFoundError);
   });
 });

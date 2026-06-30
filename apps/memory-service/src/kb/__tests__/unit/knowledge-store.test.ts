@@ -3,7 +3,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { applySchema } from "../../../db/migrations.js";
-import { FinancialStore } from "../../../financial/financial-store.js";
 import { FileManager } from "../../file-manager.js";
 import { IndexStore } from "../../index-store.js";
 import { KnowledgeStore } from "../../knowledge-store.js";
@@ -27,15 +26,13 @@ describe("KnowledgeStore", () => {
   let store: KnowledgeStore;
   let fileManager: FileManager;
   let indexStore: IndexStore;
-  let financialStore: FinancialStore;
 
   beforeEach(() => {
     db = createTestDb();
     tmpDir = createTempDir();
     fileManager = new FileManager(tmpDir);
     indexStore = new IndexStore(db);
-    financialStore = new FinancialStore(db);
-    store = new KnowledgeStore({ fileManager, indexStore, financialStore });
+    store = new KnowledgeStore({ fileManager, indexStore });
   });
 
   afterEach(() => {
@@ -177,49 +174,16 @@ describe("KnowledgeStore", () => {
       expect(indexStore.getNoteMeta(notePath)).toBeNull();
     });
 
-    it("clears linked financial memory note_path", () => {
-      const { path: notePath } = store.writeNote({
-        content: "# AAPL\n\nBullish.",
-        tags: ["stock"],
-      });
-
-      const memory = financialStore.create({
-        entityType: "opinion",
-        ticker: "AAPL",
-        direction: "bullish",
-        timeHorizon: "medium",
-        confidence: 4,
-        thesis: "Strong earnings",
-        notePath,
-      });
-
-      store.deleteNote(notePath);
-
-      const after = financialStore.getById(memory.id);
-      expect(after).not.toBeNull();
-      expect(after!.notePath).toBeUndefined();
-    });
-
     it("returns false for non-existent note", () => {
       expect(store.deleteNote("nonexistent.md")).toBe(false);
     });
   });
 
   describe("syncIndex", () => {
-    it("detects renamed files and updates financial memory note_path", () => {
+    it("detects renamed files and updates index", () => {
       const { path: oldPath } = store.writeNote({
         content: "# AAPL\n\nBullish thesis.",
         tags: ["stock"],
-      });
-
-      const memory = financialStore.create({
-        entityType: "opinion",
-        ticker: "AAPL",
-        direction: "bullish",
-        timeHorizon: "medium",
-        confidence: 4,
-        thesis: "Strong earnings",
-        notePath: oldPath,
       });
 
       const content = fileManager.read(oldPath);
@@ -236,25 +200,12 @@ describe("KnowledgeStore", () => {
 
       expect(indexStore.getNoteMeta(oldPath)).toBeNull();
       expect(indexStore.getNoteMeta(newPath!)).not.toBeNull();
-
-      const after = financialStore.getById(memory.id);
-      expect(after!.notePath).toBe(newPath);
     });
 
-    it("detects deleted files and clears financial memory note_path", () => {
+    it("detects deleted files and removes from index", () => {
       const { path: notePath } = store.writeNote({
         content: "# AAPL\n\nBullish thesis.",
         tags: ["stock"],
-      });
-
-      const memory = financialStore.create({
-        entityType: "opinion",
-        ticker: "AAPL",
-        direction: "bullish",
-        timeHorizon: "medium",
-        confidence: 4,
-        thesis: "Strong earnings",
-        notePath,
       });
 
       fileManager.delete(notePath);
@@ -263,9 +214,6 @@ describe("KnowledgeStore", () => {
       expect(result.removed).toBe(1);
 
       expect(indexStore.getNoteMeta(notePath)).toBeNull();
-
-      const after = financialStore.getById(memory.id);
-      expect(after!.notePath).toBeUndefined();
     });
   });
 

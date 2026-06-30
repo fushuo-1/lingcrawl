@@ -30,16 +30,11 @@ export interface FinancialMemory {
   direction?: Direction;
   timeHorizon?: TimeHorizon;
   confidence?: number;
-  thesis?: string;
-  risks?: string;
   source?: string;
 
   /* ---- strategy ---- */
   name?: string;
   assetClass?: AssetClass;
-  rules?: string;
-  parameters?: string;
-  backtests?: string;
   strategyStatus?: StrategyStatus;
 
   /* ---- position ---- */
@@ -48,14 +43,11 @@ export interface FinancialMemory {
   quantity?: number;
   targetPrice?: number;
   stopLoss?: number;
-  alertConditions?: string;
   positionSizePercent?: number;
 
   /* ---- lesson ---- */
   title?: string;
   lessonCategory?: LessonCategory;
-  scenario?: string;
-  lesson?: string;
 
   /* ---- common ---- */
   tags: string[];
@@ -78,16 +70,11 @@ export interface CreateFinancialMemoryInput {
   direction?: Direction;
   timeHorizon?: TimeHorizon;
   confidence?: number;
-  thesis?: string;
-  risks?: string;
   source?: string;
 
   /* strategy */
   name?: string;
   assetClass?: AssetClass;
-  rules?: string;
-  parameters?: string;
-  backtests?: string;
   strategyStatus?: StrategyStatus;
 
   /* position */
@@ -96,14 +83,11 @@ export interface CreateFinancialMemoryInput {
   quantity?: number;
   targetPrice?: number;
   stopLoss?: number;
-  alertConditions?: string;
   positionSizePercent?: number;
 
   /* lesson */
   title?: string;
   lessonCategory?: LessonCategory;
-  scenario?: string;
-  lesson?: string;
 
   tags?: string[];
   notePath?: string;
@@ -116,26 +100,18 @@ export interface UpdateFinancialMemoryInput {
   direction?: Direction;
   timeHorizon?: TimeHorizon;
   confidence?: number;
-  thesis?: string;
-  risks?: string;
   source?: string;
   name?: string;
   assetClass?: AssetClass;
-  rules?: string;
-  parameters?: string;
-  backtests?: string;
   strategyStatus?: StrategyStatus;
   positionStatus?: PositionStatus;
   costBasis?: number;
   quantity?: number;
   targetPrice?: number;
   stopLoss?: number;
-  alertConditions?: string;
   positionSizePercent?: number;
   title?: string;
   lessonCategory?: LessonCategory;
-  scenario?: string;
-  lesson?: string;
   tags?: string[];
   notePath?: string;
 }

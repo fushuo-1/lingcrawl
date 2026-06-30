@@ -85,11 +85,8 @@ function tokenize(query: string): string[] {
 function searchableText(memory: FinancialMemory): string {
   const parts = [
     memory.ticker ?? "",
-    memory.thesis ?? "",
     memory.name ?? "",
     memory.title ?? "",
-    memory.lesson ?? "",
-    memory.scenario ?? "",
     ...memory.tags,
   ];
   return parts.join(" ").toLowerCase();

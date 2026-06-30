@@ -86,15 +86,12 @@ export class KnowledgeStore {
         direction: parsed.frontmatter.direction as any,
         timeHorizon: parsed.frontmatter.time_horizon as any,
         confidence: parsed.frontmatter.confidence as number | undefined,
-        thesis: parsed.frontmatter.thesis as string | undefined,
         name: parsed.frontmatter.name as string | undefined,
         assetClass: parsed.frontmatter.asset_class as any,
-        rules: parsed.frontmatter.rules as string | undefined,
         positionStatus: parsed.frontmatter.position_status as any,
         quantity: parsed.frontmatter.quantity as number | undefined,
         title: parsed.frontmatter.title as string | undefined,
         lessonCategory: parsed.frontmatter.lesson_category as any,
-        lesson: parsed.frontmatter.lesson as string | undefined,
       });
     }
 
@@ -149,9 +146,6 @@ export class KnowledgeStore {
         lesson_category: parsed.frontmatter.lesson_category,
         name: parsed.frontmatter.name,
         title: parsed.frontmatter.title,
-        thesis: parsed.frontmatter.thesis,
-        rules: parsed.frontmatter.rules,
-        lesson: parsed.frontmatter.lesson,
       } : {}),
     };
     const markdown = serializeFrontmatter(finalFm, parsed.body);

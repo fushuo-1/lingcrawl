@@ -14,7 +14,6 @@ describe("validateRequiredFields", () => {
         direction: "bullish",
         timeHorizon: "medium",
         confidence: 4,
-        thesis: "Strong earnings growth",
       }),
     ).not.toThrow();
   });
@@ -25,7 +24,7 @@ describe("validateRequiredFields", () => {
         entityType: "opinion",
         ticker: "AAPL",
         direction: "bullish",
-        // missing timeHorizon, confidence, thesis
+        // missing timeHorizon, confidence
       } as CreateFinancialMemoryInput),
     ).toThrow(FinancialValidationError);
   });
@@ -36,11 +35,10 @@ describe("validateRequiredFields", () => {
         entityType: "opinion",
         ticker: "AAPL",
         direction: "bullish",
-        timeHorizon: "medium",
+        timeHorizon: "",
         confidence: 4,
-        thesis: "",
       }),
-    ).toThrow(/thesis/);
+    ).toThrow(/timeHorizon/);
   });
 
   it("passes for a complete strategy", () => {
@@ -49,7 +47,6 @@ describe("validateRequiredFields", () => {
         entityType: "strategy",
         name: "Momentum",
         assetClass: "stock",
-        rules: "Buy when RSI > 70",
       }),
     ).not.toThrow();
   });
@@ -89,7 +86,6 @@ describe("validateRequiredFields", () => {
         entityType: "lesson",
         title: "Don't chase pumps",
         lessonCategory: "mistake",
-        lesson: "Chasing pumps leads to losses",
       }),
     ).not.toThrow();
   });

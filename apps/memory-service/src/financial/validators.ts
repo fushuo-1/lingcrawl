@@ -10,10 +10,10 @@ const REQUIRED_FIELDS: Record<
   string,
   Array<keyof CreateFinancialMemoryInput>
 > = {
-  opinion: ["ticker", "direction", "timeHorizon", "confidence", "thesis"],
-  strategy: ["name", "assetClass", "rules"],
+  opinion: ["ticker", "direction", "timeHorizon", "confidence"],
+  strategy: ["name", "assetClass"],
   position: ["ticker", "positionStatus", "quantity"],
-  lesson: ["title", "lessonCategory", "lesson"],
+  lesson: ["title", "lessonCategory"],
 };
 
 export function validateRequiredFields(
