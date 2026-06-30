@@ -215,3 +215,100 @@ describe("FinancialIndexStore — CASCADE", () => {
     expect(store.search({ ticker: "AAPL" })).toHaveLength(0);
   });
 });
+
+/* ----- scanStaleness ----- */
+
+describe("FinancialIndexStore.scanStaleness", () => {
+  it("空表返回空数组", () => {
+    expect(store.scanStaleness()).toEqual([]);
+  });
+
+  it("根据 entity_type 和更新时间返回正确的 stage", () => {
+    const now = Math.floor(Date.now() / 1000);
+
+    insertNote("投资/active-opinion.md");
+    db.prepare(
+      "UPDATE financial_memories SET updated_at = ? WHERE note_path = ?",
+    );
+    store.upsert("投资/active-opinion.md", {
+      entityType: "opinion",
+      ticker: "AAPL",
+      updatedAt: now - 10 * 86400, // 10 天前，opinion soft=30 → active
+    });
+
+    insertNote("投资/stale-position.md");
+    store.upsert("投资/stale-position.md", {
+      entityType: "position",
+      ticker: "TSLA",
+      updatedAt: now - 60 * 86400, // 60 天前，position soft=30 hard=90 → stale
+    });
+
+    insertNote("投资/archived-lesson.md");
+    store.upsert("投资/archived-lesson.md", {
+      entityType: "lesson",
+      updatedAt: now - 800 * 86400, // 800 天前，lesson hard=730 → archived
+    });
+
+    const results = store.scanStaleness();
+    expect(results).toHaveLength(3);
+
+    const byPath = Object.fromEntries(results.map((r) => [r.notePath, r.stage]));
+    expect(byPath["投资/active-opinion.md"]).toBe("active");
+    expect(byPath["投资/stale-position.md"]).toBe("stale");
+    expect(byPath["投资/archived-lesson.md"]).toBe("archived");
+  });
+
+  it("排序顺序: archived > stale > active，同 stage 内 daysStale 降序", () => {
+    const now = Math.floor(Date.now() / 1000);
+
+    insertNote("投资/active-recent.md");
+    store.upsert("投资/active-recent.md", {
+      entityType: "opinion",
+      ticker: "A",
+      updatedAt: now - 5 * 86400,
+    });
+
+    insertNote("投资/active-old.md");
+    store.upsert("投资/active-old.md", {
+      entityType: "opinion",
+      ticker: "B",
+      updatedAt: now - 20 * 86400,
+    });
+
+    insertNote("投资/stale-recent.md");
+    store.upsert("投资/stale-recent.md", {
+      entityType: "position",
+      ticker: "C",
+      updatedAt: now - 40 * 86400,
+    });
+
+    insertNote("投资/stale-old.md");
+    store.upsert("投资/stale-old.md", {
+      entityType: "position",
+      ticker: "D",
+      updatedAt: now - 80 * 86400,
+    });
+
+    insertNote("投资/archived.md");
+    store.upsert("投资/archived.md", {
+      entityType: "lesson",
+      updatedAt: now - 800 * 86400,
+    });
+
+    const results = store.scanStaleness();
+    expect(results).toHaveLength(5);
+
+    // stage 顺序: archived → stale → active
+    expect(results[0].stage).toBe("archived");
+    expect(results[1].stage).toBe("stale");
+    expect(results[2].stage).toBe("stale");
+    expect(results[3].stage).toBe("active");
+    expect(results[4].stage).toBe("active");
+
+    // stale 内部: daysStale 降序
+    expect(results[1].daysStale).toBeGreaterThanOrEqual(results[2].daysStale);
+
+    // active 内部: daysStale 降序
+    expect(results[3].daysStale).toBeGreaterThanOrEqual(results[4].daysStale);
+  });
+});
