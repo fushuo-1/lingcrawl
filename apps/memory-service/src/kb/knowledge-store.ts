@@ -127,26 +127,28 @@ export class KnowledgeStore {
       tags,
       created: parsed.frontmatter.created || originalCreated || now,
       updated: now,
-      // 保留金融记忆字段到序列化后的 frontmatter
-      ...(entityType ? {
-        entity_type: entityType,
-        ticker: parsed.frontmatter.ticker,
-        market: parsed.frontmatter.market,
-        direction: parsed.frontmatter.direction,
-        time_horizon: parsed.frontmatter.time_horizon,
-        confidence: parsed.frontmatter.confidence,
-        asset_class: parsed.frontmatter.asset_class,
-        strategy_status: parsed.frontmatter.strategy_status,
-        position_status: parsed.frontmatter.position_status,
-        cost_basis: parsed.frontmatter.cost_basis,
-        quantity: parsed.frontmatter.quantity,
-        target_price: parsed.frontmatter.target_price,
-        stop_loss: parsed.frontmatter.stop_loss,
-        position_size_percent: parsed.frontmatter.position_size_percent,
-        lesson_category: parsed.frontmatter.lesson_category,
-        name: parsed.frontmatter.name,
-        title: parsed.frontmatter.title,
-      } : {}),
+      // 保留金融记忆字段到序列化后的 frontmatter（过滤 undefined）
+      ...(entityType ? Object.fromEntries(
+        Object.entries({
+          entity_type: entityType,
+          ticker: parsed.frontmatter.ticker,
+          market: parsed.frontmatter.market,
+          direction: parsed.frontmatter.direction,
+          time_horizon: parsed.frontmatter.time_horizon,
+          confidence: parsed.frontmatter.confidence,
+          asset_class: parsed.frontmatter.asset_class,
+          strategy_status: parsed.frontmatter.strategy_status,
+          position_status: parsed.frontmatter.position_status,
+          cost_basis: parsed.frontmatter.cost_basis,
+          quantity: parsed.frontmatter.quantity,
+          target_price: parsed.frontmatter.target_price,
+          stop_loss: parsed.frontmatter.stop_loss,
+          position_size_percent: parsed.frontmatter.position_size_percent,
+          lesson_category: parsed.frontmatter.lesson_category,
+          name: parsed.frontmatter.name,
+          title: parsed.frontmatter.title,
+        }).filter(([, v]) => v !== undefined && v !== null),
+      ) : {}),
     };
     const markdown = serializeFrontmatter(finalFm, parsed.body);
 
