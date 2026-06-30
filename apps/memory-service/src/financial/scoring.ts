@@ -22,6 +22,13 @@ const TYPE_WEIGHTS: Record<FinancialMemory["entityType"], number> = {
   lesson: 0.85,
 };
 
+const HALF_LIFE_DAYS: Record<FinancialMemory["entityType"], number> = {
+  position: 14,
+  opinion: 30,
+  strategy: 90,
+  lesson: Infinity,  // never decays
+};
+
 function daysSinceUpdate(memory: FinancialMemory, nowSeconds: number): number {
   const seconds = nowSeconds - memory.updatedAt;
   return Math.max(0, seconds / 86400);
@@ -29,7 +36,9 @@ function daysSinceUpdate(memory: FinancialMemory, nowSeconds: number): number {
 
 function computeTimeDecay(memory: FinancialMemory, nowSeconds: number): number {
   const days = daysSinceUpdate(memory, nowSeconds);
-  return Math.exp(-Math.LN2 * (days / 30));
+  const halfLife = HALF_LIFE_DAYS[memory.entityType] ?? 30;
+  if (!isFinite(halfLife)) return 1.0;  // lesson: no decay
+  return Math.exp(-Math.LN2 * (days / halfLife));
 }
 
 function computeConfidenceOrSize(memory: FinancialMemory): number {
@@ -124,17 +133,19 @@ export function scoreMemory(
   memory: FinancialMemory,
   query: string | undefined,
   nowSeconds: number,
+  isStale?: boolean,
 ): ScoredMemory {
   const timeDecay = computeTimeDecay(memory, nowSeconds);
   const typeWeight = TYPE_WEIGHTS[memory.entityType] ?? 0.5;
   const confidenceOrSize = computeConfidenceOrSize(memory);
   const matchQuality = computeMatchQuality(memory, query);
+  const stalePenalty = isStale ? 0.5 : 1.0;
 
   const relevanceScore =
-    timeDecay * WEIGHTS.timeDecay +
+    (timeDecay * WEIGHTS.timeDecay +
     typeWeight * WEIGHTS.typeWeight +
     confidenceOrSize * WEIGHTS.confidenceOrSize +
-    matchQuality * WEIGHTS.matchQuality;
+    matchQuality * WEIGHTS.matchQuality) * stalePenalty;
 
   return { memory, relevanceScore };
 }
@@ -143,8 +154,11 @@ export function scoreAndSortMemories(
   memories: FinancialMemory[],
   query: string | undefined,
   nowSeconds: number,
+  stalePaths?: Set<string>,
 ): ScoredMemory[] {
-  const scored = memories.map((m) => scoreMemory(m, query, nowSeconds));
+  const scored = memories.map((m) =>
+    scoreMemory(m, query, nowSeconds, stalePaths?.has(m.id) ?? false),
+  );
   scored.sort((a, b) => b.relevanceScore - a.relevanceScore);
   return scored;
 }
