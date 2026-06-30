@@ -4,11 +4,24 @@ import { config } from "../config";
 import { logger } from "../lib/logger";
 import * as fs from "fs";
 import * as path from "path";
-import { clearCookieExpired } from "../scraper/scrapeURL/postprocessors/zhihu";
 
 const log = logger.child({ module: "zhihu-auth" });
 
 const ENV_PATH = path.resolve(process.cwd(), "../../.env");
+const COOKIE_STATUS_FILE = path.resolve(process.cwd(), "../../.zhihu-cookie-status");
+
+/**
+ * Clear the cookie expired status file after successful cookie refresh.
+ */
+function clearCookieExpired() {
+  try {
+    if (fs.existsSync(COOKIE_STATUS_FILE)) {
+      fs.unlinkSync(COOKIE_STATUS_FILE);
+    }
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * Update ZHIHU_COOKIE in the .env file and runtime config.
@@ -135,8 +148,6 @@ export const zhihuQrLoginPoll = withErrorHandler(
     });
   },
 );
-
-const COOKIE_STATUS_FILE = path.resolve(process.cwd(), "../../.zhihu-cookie-status");
 
 /**
  * GET /api/zhihu/cookie-status
