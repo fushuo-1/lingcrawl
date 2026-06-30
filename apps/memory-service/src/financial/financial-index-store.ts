@@ -5,6 +5,8 @@
  * 替代原 FinancialStore 的索引层。
  */
 import type Database from "better-sqlite3";
+import { computeStaleness } from "./staleness.js";
+import type { StalenessStage } from "./staleness.js";
 import { scoreAndSortMemories } from "./scoring.js";
 import type { FinancialMemory } from "./types.js";
 
@@ -65,6 +67,15 @@ export interface SearchResultItem {
   tags: string[];
   createdAt: number;
   updatedAt: number;
+}
+
+export interface StalenessEntry {
+  notePath: string;
+  entityType: string;
+  ticker?: string;
+  updatedAt: number;
+  daysStale: number;
+  stage: StalenessStage;
 }
 
 /* ------------------------------------------------------------------ */
@@ -266,5 +277,45 @@ export class FinancialIndexStore {
       .all(...params, limit, offset) as Record<string, unknown>[];
 
     return rows.map(rowToResult);
+  }
+
+  /* ---- Scan staleness ---- */
+
+  scanStaleness(): StalenessEntry[] {
+    const rows = this.db
+      .prepare(
+        "SELECT note_path, entity_type, ticker, updated_at FROM financial_memories ORDER BY updated_at ASC",
+      )
+      .all() as Record<string, unknown>[];
+
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
+    const stageOrder: Record<StalenessStage, number> = {
+      archived: 0,
+      stale: 1,
+      active: 2,
+    };
+
+    return rows
+      .map((row) => {
+        const { daysStale, stage } = computeStaleness(
+          row.entity_type as string,
+          row.updated_at as number,
+          nowSeconds,
+        );
+        return {
+          notePath: row.note_path as string,
+          entityType: row.entity_type as string,
+          ticker: row.ticker as string | undefined,
+          updatedAt: row.updated_at as number,
+          daysStale,
+          stage,
+        };
+      })
+      .sort((a, b) => {
+        const stageDiff = stageOrder[a.stage] - stageOrder[b.stage];
+        if (stageDiff !== 0) return stageDiff;
+        return b.daysStale - a.daysStale;
+      });
   }
 }
