@@ -44,22 +44,22 @@ describe("db/client — _initDb", () => {
     expect(() => db.pragma("journal_mode = WAL")).not.toThrow();
   });
 
-  it("enables WAL journal mode on a real file path", () => {
+  it("uses DELETE journal mode by default (safe for Docker bind mounts)", () => {
     const tmpFile = path.join(
       os.tmpdir(),
-      `memory-svc-wal-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+      `memory-svc-journal-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
     );
     try {
       const fileDb = _initDb(tmpFile);
       try {
         const mode = fileDb.pragma("journal_mode", { simple: true });
-        expect(mode).toBe("wal");
+        expect(mode).toBe("delete");
       } finally {
         fileDb.close();
       }
     } finally {
-      // Clean up -shm and -wal sidecar files too.
-      for (const ext of ["", "-shm", "-wal", "-journal"]) {
+      // Clean up -journal sidecar files.
+      for (const ext of ["", "-journal"]) {
         try {
           fs.unlinkSync(tmpFile + ext);
         } catch {

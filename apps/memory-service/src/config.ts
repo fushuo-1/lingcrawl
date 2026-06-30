@@ -24,6 +24,11 @@ const configSchema = z.object({
 
   // Knowledge Base — Markdown files directory
   KB_DATA_DIR: z.string().default("~/.lingcrawl/knowledge/"),
+
+  // SQLite journal mode — DELETE is safe for Docker bind mounts on NTFS;
+  // WAL is faster for concurrent readers but requires native fcntl locks
+  // (unreliable across Windows→Linux volume mounts).
+  SQLITE_JOURNAL_MODE: z.enum(["wal", "delete"]).default("delete"),
 });
 
 /* Parse — fail-fast with a readable error */

@@ -184,11 +184,15 @@ services:
       - "127.0.0.1:3001:3001"
     networks:
       - backend
+    stop_grace_period: 15s
     environment:
       HOST: 0.0.0.0
       PORT: 3001
       DATA_DIR: /data
       KB_DATA_DIR: ${KB_DATA_DIR:-/data/knowledge}
+      # DELETE is safe for Docker bind mounts (NTFS); switch to WAL only with
+      # a named volume or native Linux filesystem.
+      SQLITE_JOURNAL_MODE: ${SQLITE_JOURNAL_MODE:-delete}
     volumes:
       - //c/Users/34317/.lingcrawl:/data
       - ${KB_DATA_HOST}:/kb-data

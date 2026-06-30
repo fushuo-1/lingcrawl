@@ -55,8 +55,10 @@ async function start(): Promise<void> {
 
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}, shutting down`);
-    closeDb();
+    // 1. Stop accepting new requests and wait for in-flight ones to finish.
     await app.close();
+    // 2. Now safe to close the DB — no requests are using it.
+    closeDb();
     process.exit(0);
   };
 

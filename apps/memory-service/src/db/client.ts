@@ -31,9 +31,9 @@ export function _initDb(dbPath: string): Database.Database {
     });
   }
 
-  // PRAGMAs — WAL is the headline requirement (concurrent MCP clients must
-  // not block each other), the rest are sane defaults.
-  db.pragma("journal_mode = WAL");
+  // Apply non-journal PRAGMAs first. Note: `synchronous = NORMAL` will
+  // silently re-enable WAL mode if it's currently DELETE, so the journal
+  // mode PRAGMA must come LAST to take effect.
   db.pragma("synchronous = NORMAL");
   db.pragma("busy_timeout = 5000");
   db.pragma("foreign_keys = ON");
@@ -44,6 +44,11 @@ export function _initDb(dbPath: string): Database.Database {
     db.close();
     throw new DbError("Failed to apply DB schema", { cause: err });
   }
+
+  // Journal mode — applied LAST because setting `synchronous = NORMAL` above
+  // would otherwise flip us back to WAL. Default DELETE is safe for Docker
+  // bind mounts where fcntl locks are unreliable.
+  db.pragma(`journal_mode = ${config.SQLITE_JOURNAL_MODE}`);
 
   return db;
 }
@@ -64,6 +69,15 @@ export function getDb(): Database.Database {
 /** Close the singleton (test cleanup). Idempotent. */
 export function closeDb(): void {
   if (dbInstance) {
+    // If WAL mode is active, checkpoint before closing so no data is left
+    // only in the WAL file (which would be lost if the container is killed).
+    if (config.SQLITE_JOURNAL_MODE === "wal") {
+      try {
+        dbInstance.pragma("wal_checkpoint(TRUNCATE)");
+      } catch {
+        // Best-effort; don't prevent shutdown on checkpoint failure.
+      }
+    }
     dbInstance.close();
     dbInstance = null;
   }
