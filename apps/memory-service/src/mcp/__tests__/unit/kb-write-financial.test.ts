@@ -294,6 +294,136 @@ describe("kb_write 金融记忆 — overwrite", () => {
   });
 });
 
+/* ----- overwrite 清除 stale/archived 标记 (#118) ----- */
+
+describe("kb_write — overwrite 清除 stale/archived", () => {
+  it("覆写 stale 记忆 → stale 标记被清除", () => {
+    // 直接写磁盘模拟已有 stale 记忆（writeNote 不会保留 stale 字段）
+    const staleContent = [
+      "---",
+      "tags: [投资]",
+      "created: 2025-01-01T00:00:00Z",
+      "updated: 2025-01-01T00:00:00Z",
+      "stale: true",
+      "---",
+      "",
+      "# 过时笔记",
+      "",
+      "旧内容",
+    ].join("\n");
+
+    const notePath = "投资/过时笔记.md";
+    // 手动写入磁盘 + 索引，模拟历史 stale 文件
+    tmpDir; // 触发 FileManager 写入
+    const fs2 = require("node:fs");
+    const path2 = require("node:path");
+    fs2.mkdirSync(path2.join(tmpDir, "投资"), { recursive: true });
+    fs2.writeFileSync(path2.join(tmpDir, notePath), staleContent, "utf-8");
+
+    // 覆写，新内容无 stale
+    const freshContent = [
+      "---",
+      "tags: [投资]",
+      "created: 2025-01-01T00:00:00Z",
+      "updated: 2025-06-01T00:00:00Z",
+      "---",
+      "",
+      "# 过时笔记",
+      "",
+      "新内容",
+    ].join("\n");
+
+    store.writeNote({ content: freshContent, path: notePath, overwrite: true });
+
+    const after = store.readNote(notePath);
+    expect(after.frontmatter.stale).toBeUndefined();
+    expect(after.frontmatter.archived).toBeUndefined();
+    expect(after.frontmatter.created).toBe("2025-01-01T00:00:00Z");
+    expect(after.body).toContain("新内容");
+  });
+
+  it("覆写 archived 记忆 → archived 标记被清除", () => {
+    // 直接写磁盘模拟已有 archived 记忆
+    const archivedContent = [
+      "---",
+      "tags: [投资]",
+      "created: 2025-02-01T00:00:00Z",
+      "updated: 2025-02-01T00:00:00Z",
+      "archived: true",
+      "---",
+      "",
+      "# 归档笔记",
+      "",
+      "旧内容",
+    ].join("\n");
+
+    const notePath = "投资/归档笔记.md";
+    const fs2 = require("node:fs");
+    const path2 = require("node:path");
+    fs2.mkdirSync(path2.join(tmpDir, "投资"), { recursive: true });
+    fs2.writeFileSync(path2.join(tmpDir, notePath), archivedContent, "utf-8");
+
+    const freshContent = [
+      "---",
+      "tags: [投资]",
+      "created: 2025-02-01T00:00:00Z",
+      "updated: 2025-06-01T00:00:00Z",
+      "---",
+      "",
+      "# 归档笔记",
+      "",
+      "更新后内容",
+    ].join("\n");
+
+    store.writeNote({ content: freshContent, path: notePath, overwrite: true });
+
+    const after = store.readNote(notePath);
+    expect(after.frontmatter.archived).toBeUndefined();
+    expect(after.frontmatter.stale).toBeUndefined();
+  });
+
+  it("覆写非 stale 记忆 → 不会凭空添加 stale 标记", () => {
+    const content = [
+      "---",
+      "tags: [AI]",
+      "created: 2025-03-01T00:00:00Z",
+      "updated: 2025-03-01T00:00:00Z",
+      "---",
+      "",
+      "# 正常笔记",
+      "",
+      "内容",
+    ].join("\n");
+
+    const notePath = "AI/正常笔记.md";
+    store.writeNote({ content, path: notePath });
+    store.writeNote({ content, path: notePath, overwrite: true });
+
+    const after = store.readNote(notePath);
+    expect(after.frontmatter.stale).toBeUndefined();
+    expect(after.frontmatter.archived).toBeUndefined();
+  });
+
+  it("新文件（非覆写）→ 不触发 stale 清除逻辑", () => {
+    const content = [
+      "---",
+      "tags: [AI]",
+      "created: 2025-04-01T00:00:00Z",
+      "updated: 2025-04-01T00:00:00Z",
+      "---",
+      "",
+      "# 全新笔记",
+      "",
+      "内容",
+    ].join("\n");
+
+    const result = store.writeNote({ content, path: "AI/全新笔记.md" });
+    const after = store.readNote(result.path);
+    expect(after.frontmatter.stale).toBeUndefined();
+    expect(after.frontmatter.archived).toBeUndefined();
+  });
+});
+
 /* ----- 无 entity_type 的普通笔记 ----- */
 
 describe("kb_write 普通笔记", () => {

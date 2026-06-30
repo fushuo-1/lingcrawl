@@ -114,13 +114,16 @@ export class KnowledgeStore {
       notePath = this.avoidCollision(notePath);
     }
 
-    // 7. Serialize final markdown — preserve original created timestamp when overwriting
+    // 7. Serialize final markdown — preserve original created timestamp when overwriting.
+    //    Also detect stale/archived flags so they are cleared on overwrite (#118).
     const now = new Date().toISOString();
     let originalCreated: string | undefined;
+    let wasStale = false;
     if (overwrite && this.fileManager.exists(notePath)) {
       try {
         const existing = parseFrontmatter(this.fileManager.read(notePath));
         originalCreated = existing.frontmatter.created;
+        wasStale = existing.frontmatter.stale === true || existing.frontmatter.archived === true;
       } catch { /* ignore parse errors on existing file */ }
     }
     const finalFm: Frontmatter = {
