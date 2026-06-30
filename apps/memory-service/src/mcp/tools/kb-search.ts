@@ -58,8 +58,12 @@ export function registerKbSearchTool(
         .max(100)
         .default(20)
         .describe("Maximum number of hits to return (1-100, default 20)."),
+      include_archived: z
+        .boolean()
+        .default(false)
+        .describe("Include notes under _archived/ directories. Default false."),
     },
-    async ({ query, tags, path, entity_type, ticker, direction, market, limit }) => {
+    async ({ query, tags, path, entity_type, ticker, direction, market, limit, include_archived }) => {
       try {
         // 有金融过滤参数时，先从 financial_memories 获取匹配的 notePath 集合
         const hasFinancialFilters = entity_type || ticker || direction || market;
@@ -97,6 +101,7 @@ export function registerKbSearchTool(
           tags,
           pathPrefix: path,
           limit: hasFinancialFilters ? 1000 : limit,
+          excludeArchived: !include_archived,
         });
 
         // 金融过滤 + FTS5 取交集，然后截取 limit

@@ -280,3 +280,43 @@ describe("kb_search 金融过滤 + FTS5 组合", () => {
     expect(body.count).toBe(0);
   });
 });
+
+/* ----- include_archived 过滤 ----- */
+
+describe("kb_search include_archived 参数", () => {
+  it("默认搜索排除 _archived/ 路径下的笔记", async () => {
+    // 写入一条 _archived/ 路径的笔记
+    knowledgeStore.writeNote({
+      content: "---\ntags: [旧笔记]\n---\n\n# Old Archived Note\n\nThis is an archived note about archived content.",
+      path: "tech/_archived/old-cache.md",
+    });
+
+    // 默认搜索不应返回归档笔记
+    const body = await callSearch({ query: "archived" });
+    const paths = body.hits.map((h) => h.path);
+    expect(paths).not.toContain("tech/_archived/old-cache.md");
+  });
+
+  it("include_archived=true 包含 _archived/ 路径下的笔记", async () => {
+    // 写入一条 _archived/ 路径的笔记
+    knowledgeStore.writeNote({
+      content: "---\ntags: [旧笔记]\n---\n\n# Old Archived Note\n\nThis is an archived note about archived content.",
+      path: "tech/_archived/old-cache.md",
+    });
+
+    const body = await callSearch({ query: "archived", include_archived: true });
+    const paths = body.hits.map((h) => h.path);
+    expect(paths).toContain("tech/_archived/old-cache.md");
+  });
+
+  it("include_archived=false 行为与默认一致（排除归档笔记）", async () => {
+    knowledgeStore.writeNote({
+      content: "---\ntags: [旧笔记]\n---\n\n# Old Archived Note\n\nThis is an archived note about archived content.",
+      path: "tech/_archived/old-cache.md",
+    });
+
+    const body = await callSearch({ query: "archived", include_archived: false });
+    const paths = body.hits.map((h) => h.path);
+    expect(paths).not.toContain("tech/_archived/old-cache.md");
+  });
+});
