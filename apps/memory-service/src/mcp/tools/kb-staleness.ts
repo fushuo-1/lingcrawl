@@ -148,6 +148,10 @@ function handleArchive(
 
   const results: ArchiveResult[] = [];
 
+  // 预加载所有金融记忆的过时状态（避免循环内重复查询）
+  const allStaleness = financialIndexStore.scanStaleness();
+  const stalenessMap = new Map(allStaleness.map((s) => [s.notePath, s.stage]));
+
   for (const notePath of paths) {
     // 读取笔记，解析 frontmatter
     let frontmatter: Record<string, unknown>;
@@ -173,10 +177,8 @@ function handleArchive(
       continue;
     }
 
-    // 从 financialIndexStore 获取当前 stage
-    const scanResults = financialIndexStore.scanStaleness();
-    const entry = scanResults.find((s) => s.notePath === notePath);
-    const stage: StalenessStage = entry?.stage ?? "active";
+    // 从预加载的 map 获取当前 stage
+    const stage: StalenessStage = stalenessMap.get(notePath) ?? "active";
 
     if (stage === "active") {
       results.push({

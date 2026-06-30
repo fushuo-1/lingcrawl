@@ -301,8 +301,6 @@ describe("kb_staleness — archive hard", () => {
     expect(body.results[0].action).toBe("hard_archived");
 
     // 旧路径应已删除
-    const oldRead = callTool(client, "kb_read", { path: "投资/old-position.md" });
-    // knowledgeStore.readNote 应抛出错误
     expect(() => knowledgeStore.readNote("投资/old-position.md")).toThrow();
 
     // 新路径应存在，带 stale: true + archived: true
