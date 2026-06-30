@@ -150,6 +150,8 @@ export class KnowledgeStore {
           lesson_category: parsed.frontmatter.lesson_category,
           name: parsed.frontmatter.name,
           title: parsed.frontmatter.title,
+          stale: parsed.frontmatter.stale,
+          archived: parsed.frontmatter.archived,
         }).filter(([, v]) => v !== undefined && v !== null),
       ) : {}),
     };

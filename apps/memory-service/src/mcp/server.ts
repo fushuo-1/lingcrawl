@@ -16,6 +16,7 @@ import { getDb } from "../db/client.js";
 import { FileManager } from "../kb/file-manager.js";
 import { IndexStore } from "../kb/index-store.js";
 import { KnowledgeStore } from "../kb/knowledge-store.js";
+import { registerKbStalenessTool } from "./tools/kb-staleness.js";
 import { registerKbDeleteTool } from "./tools/kb-delete.js";
 import { registerKbListTool } from "./tools/kb-list.js";
 import { registerKbLinkTool } from "./tools/kb-link.js";
@@ -63,7 +64,8 @@ export function createMemoryMcpServer(
         "Read kb://recent and kb://index resources for session context. " +
         "Financial memories: write via kb_write with entity_type frontmatter fields " +
         "(entity_type, ticker, direction, time_horizon, confidence, etc.); " +
-        "search via kb_search with entity_type/ticker/direction/market filters.",
+        "search via kb_search with entity_type/ticker/direction/market filters. " +
+        "Use kb_staleness to scan staleness of financial memories and archive outdated ones.",
     },
   );
 
@@ -87,6 +89,7 @@ export function createMemoryMcpServer(
   registerKbLinkTool(server, knowledgeStore);
   registerKbSyncTool(server, knowledgeStore);
   registerKbDeleteTool(server, knowledgeStore);
+  registerKbStalenessTool(server, knowledgeStore, financialIndexStore);
   registerKbResources(server, { indexStore: kbIndexStore });
 
   return {
