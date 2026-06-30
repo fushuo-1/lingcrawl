@@ -5,7 +5,8 @@
  * to provide writeNote / readNote with full frontmatter handling,
  * wikilink extraction, and duplicate-path avoidance.
  */
-import type { FinancialStore } from "../financial/financial-store.js";
+import type { FinancialIndexStore, FinancialSlimFields } from "../financial/financial-index-store.js";
+import { validateRequiredFields } from "../financial/validators.js";
 import path from "node:path";
 import type { FileManager } from "./file-manager.js";
 import type { IndexStore, Link, NoteMeta } from "./index-store.js";
@@ -33,16 +34,16 @@ export interface ReadResult {
 export class KnowledgeStore {
   private fileManager: FileManager;
   private indexStore: IndexStore;
-  private financialStore?: FinancialStore;
+  private financialIndexStore?: FinancialIndexStore;
 
   constructor(deps: {
     fileManager: FileManager;
     indexStore: IndexStore;
-    financialStore?: FinancialStore;
+    financialIndexStore?: FinancialIndexStore;
   }) {
     this.fileManager = deps.fileManager;
     this.indexStore = deps.indexStore;
-    this.financialStore = deps.financialStore;
+    this.financialIndexStore = deps.financialIndexStore;
   }
 
   /**
@@ -74,6 +75,28 @@ export class KnowledgeStore {
 
     // 2. Parse frontmatter
     const parsed = parseFrontmatter(content);
+
+    // 2.5 检测是否为金融记忆 — 写磁盘前校验必填字段
+    const entityType = parsed.frontmatter.entity_type as string | undefined;
+    if (entityType && this.financialIndexStore) {
+      // 将 snake_case frontmatter 映射到 camelCase 供 validator 使用
+      validateRequiredFields({
+        entityType: entityType as any,
+        ticker: parsed.frontmatter.ticker as string | undefined,
+        direction: parsed.frontmatter.direction as any,
+        timeHorizon: parsed.frontmatter.time_horizon as any,
+        confidence: parsed.frontmatter.confidence as number | undefined,
+        thesis: parsed.frontmatter.thesis as string | undefined,
+        name: parsed.frontmatter.name as string | undefined,
+        assetClass: parsed.frontmatter.asset_class as any,
+        rules: parsed.frontmatter.rules as string | undefined,
+        positionStatus: parsed.frontmatter.position_status as any,
+        quantity: parsed.frontmatter.quantity as number | undefined,
+        title: parsed.frontmatter.title as string | undefined,
+        lessonCategory: parsed.frontmatter.lesson_category as any,
+        lesson: parsed.frontmatter.lesson as string | undefined,
+      });
+    }
 
     // 3. Determine title — from frontmatter body's first heading, or generate one
     const title = this.extractTitle(parsed.body);
@@ -107,6 +130,29 @@ export class KnowledgeStore {
       tags,
       created: parsed.frontmatter.created || originalCreated || now,
       updated: now,
+      // 保留金融记忆字段到序列化后的 frontmatter
+      ...(entityType ? {
+        entity_type: entityType,
+        ticker: parsed.frontmatter.ticker,
+        market: parsed.frontmatter.market,
+        direction: parsed.frontmatter.direction,
+        time_horizon: parsed.frontmatter.time_horizon,
+        confidence: parsed.frontmatter.confidence,
+        asset_class: parsed.frontmatter.asset_class,
+        strategy_status: parsed.frontmatter.strategy_status,
+        position_status: parsed.frontmatter.position_status,
+        cost_basis: parsed.frontmatter.cost_basis,
+        quantity: parsed.frontmatter.quantity,
+        target_price: parsed.frontmatter.target_price,
+        stop_loss: parsed.frontmatter.stop_loss,
+        position_size_percent: parsed.frontmatter.position_size_percent,
+        lesson_category: parsed.frontmatter.lesson_category,
+        name: parsed.frontmatter.name,
+        title: parsed.frontmatter.title,
+        thesis: parsed.frontmatter.thesis,
+        rules: parsed.frontmatter.rules,
+        lesson: parsed.frontmatter.lesson,
+      } : {}),
     };
     const markdown = serializeFrontmatter(finalFm, parsed.body);
 
@@ -123,6 +169,34 @@ export class KnowledgeStore {
 
     // 10. Extract and persist wikilinks
     this.updateLinks(notePath, parsed.body);
+
+    // 11. 金融记忆索引写入
+    if (entityType && this.financialIndexStore) {
+      const createdTs = parsed.frontmatter.created
+        ? Math.floor(new Date(parsed.frontmatter.created).getTime() / 1000)
+        : Math.floor(Date.now() / 1000);
+      const slim: FinancialSlimFields = {
+        entityType,
+        ticker: parsed.frontmatter.ticker as string | undefined,
+        market: parsed.frontmatter.market as string | undefined,
+        direction: parsed.frontmatter.direction as string | undefined,
+        timeHorizon: parsed.frontmatter.time_horizon as string | undefined,
+        confidence: parsed.frontmatter.confidence as number | undefined,
+        assetClass: parsed.frontmatter.asset_class as string | undefined,
+        strategyStatus: parsed.frontmatter.strategy_status as string | undefined,
+        positionStatus: parsed.frontmatter.position_status as string | undefined,
+        costBasis: parsed.frontmatter.cost_basis as number | undefined,
+        quantity: parsed.frontmatter.quantity as number | undefined,
+        targetPrice: parsed.frontmatter.target_price as number | undefined,
+        stopLoss: parsed.frontmatter.stop_loss as number | undefined,
+        positionSizePercent: parsed.frontmatter.position_size_percent as number | undefined,
+        lessonCategory: parsed.frontmatter.lesson_category as string | undefined,
+        tags,
+        createdAt: createdTs,
+        updatedAt: Math.floor(Date.now() / 1000),
+      };
+      this.financialIndexStore.upsert(notePath, slim);
+    }
 
     return { path: notePath, title, created: true };
   }
@@ -189,7 +263,7 @@ export class KnowledgeStore {
     }
     const indexed = this.indexStore.deleteNote(notePath);
     this.indexStore.removeLinksForNote(notePath);
-    this.financialStore?.clearNotePath(notePath);
+    this.financialIndexStore?.delete(notePath);
     return existed || indexed;
   }
 
@@ -250,7 +324,7 @@ export class KnowledgeStore {
           this.indexStore.upsertNote({ path: relativePath, title, tags, content: raw });
           this.indexStore.removeLinksForNote(relativePath);
           this.updateLinks(relativePath, parsed.body);
-          this.financialStore?.updateNotePath(renamedFrom.path, relativePath);
+          this.financialIndexStore?.updateNotePath(renamedFrom.path, relativePath);
         }
         renamed++;
         indexedByPath.delete(renamedFrom.path);
@@ -273,7 +347,7 @@ export class KnowledgeStore {
       if (!dryRun) {
         this.indexStore.deleteNote(notePath);
         this.indexStore.removeLinksForNote(notePath);
-        this.financialStore?.clearNotePath(notePath);
+        this.financialIndexStore?.delete(notePath);
       }
       removed++;
     }

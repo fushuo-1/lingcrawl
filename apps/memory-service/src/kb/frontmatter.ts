@@ -8,6 +8,7 @@ export interface Frontmatter {
   tags: string[];
   created: string; // ISO 8601
   updated: string; // ISO 8601
+  [key: string]: unknown; // 保留任意额外 YAML 字段（如金融记忆字段）
 }
 
 export interface ParsedNote {
@@ -126,8 +127,19 @@ export function parse(markdown: string): ParsedNote {
   const created = fm.created?.replace(/^["']|["']$/g, "") || nowISO();
   const updated = fm.updated?.replace(/^["']|["']$/g, "") || nowISO();
 
+  // 保留所有额外字段（如金融记忆的 entity_type, ticker 等）
+  const extra: Record<string, unknown> = {};
+  const KNOWN_KEYS = new Set(["tags", "created", "updated"]);
+  for (const [key, value] of Object.entries(fm)) {
+    if (!KNOWN_KEYS.has(key)) {
+      // 尝试解析数值
+      const num = Number(value);
+      extra[key] = Number.isFinite(num) && value.trim() !== "" ? num : value;
+    }
+  }
+
   return {
-    frontmatter: { tags, created, updated },
+    frontmatter: { tags, created, updated, ...extra },
     body,
   };
 }
@@ -138,15 +150,26 @@ export function serialize(frontmatter: Frontmatter, body: string): string {
       ? `[${frontmatter.tags.join(", ")}]`
       : "[]";
 
-  const fm = [
+  const fmLines = [
     FM_DELIMITER,
     `tags: ${tagsYaml}`,
+  ];
+
+  // 写入额外字段（按插入顺序，在 tags 之后、created 之前）
+  const KNOWN_KEYS = new Set(["tags", "created", "updated"]);
+  for (const [key, value] of Object.entries(frontmatter)) {
+    if (!KNOWN_KEYS.has(key)) {
+      fmLines.push(`${key}: ${value}`);
+    }
+  }
+
+  fmLines.push(
     `created: ${frontmatter.created}`,
     `updated: ${frontmatter.updated}`,
     FM_DELIMITER,
-  ].join("\n");
+  );
 
   // Ensure body starts with a newline after closing delimiter
   const bodyContent = body.startsWith("\n") ? body : `\n${body}`;
-  return `${fm}${bodyContent}`;
+  return `${fmLines.join("\n")}${bodyContent}`;
 }

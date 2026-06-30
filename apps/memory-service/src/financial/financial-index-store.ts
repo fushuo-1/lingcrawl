@@ -156,6 +156,15 @@ export class FinancialIndexStore {
     return info.changes > 0;
   }
 
+  /* ---- Update note path (rename) ---- */
+
+  updateNotePath(oldPath: string, newPath: string): boolean {
+    const info = this.db
+      .prepare("UPDATE financial_memories SET note_path = ? WHERE note_path = ?")
+      .run(newPath, oldPath);
+    return info.changes > 0;
+  }
+
   /* ---- Search ---- */
 
   search(filters: SearchFilters = {}): SearchResultItem[] {
