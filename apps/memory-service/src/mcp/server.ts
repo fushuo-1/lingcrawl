@@ -90,7 +90,7 @@ export function createMemoryMcpServer(
 
   registerKbWriteTool(server, knowledgeStore);
   registerKbReadTool(server, knowledgeStore);
-  registerKbSearchTool(server, kbIndexStore);
+  registerKbSearchTool(server, kbIndexStore, financialIndexStore);
   registerKbListTool(server, knowledgeStore);
   registerKbLinkTool(server, knowledgeStore);
   registerKbSyncTool(server, knowledgeStore);
