@@ -111,40 +111,27 @@ CREATE TABLE IF NOT EXISTS links (
 CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_path);
 CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_title);
 
--- Financial memories (issue #99)
+-- Financial memories (issue #99 → #107 瘦身索引表，长文本存入 Markdown 笔记)
 CREATE TABLE IF NOT EXISTS financial_memories (
-  id TEXT PRIMARY KEY,
+  note_path TEXT PRIMARY KEY REFERENCES notes(path) ON DELETE CASCADE,
   entity_type TEXT NOT NULL CHECK(entity_type IN ('opinion','strategy','position','lesson')),
   ticker TEXT,
   market TEXT,
   direction TEXT CHECK(direction IN ('bullish','bearish','neutral')),
   time_horizon TEXT CHECK(time_horizon IN ('short','medium','long')),
   confidence INTEGER CHECK(confidence BETWEEN 1 AND 5),
-  thesis TEXT,
-  risks TEXT,
-  source TEXT,
-  name TEXT,
   asset_class TEXT CHECK(asset_class IN ('stock','etf','bond','crypto','mixed')),
-  rules TEXT,
-  parameters TEXT,
-  backtests TEXT,
   strategy_status TEXT CHECK(strategy_status IN ('draft','active','paused','retired')),
   position_status TEXT CHECK(position_status IN ('holding','watching','closed')),
   cost_basis REAL,
   quantity REAL,
   target_price REAL,
   stop_loss REAL,
-  alert_conditions TEXT,
   position_size_percent REAL,
-  title TEXT,
   lesson_category TEXT CHECK(lesson_category IN ('mistake','principle','framework','insight')),
-  scenario TEXT,
-  lesson TEXT,
   tags TEXT NOT NULL DEFAULT '[]',
-  note_path TEXT,
   created_at INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
-CREATE INDEX IF NOT EXISTS idx_financial_memories_entity_type ON financial_memories(entity_type);
-CREATE INDEX IF NOT EXISTS idx_financial_memories_ticker ON financial_memories(ticker);
-CREATE INDEX IF NOT EXISTS idx_financial_memories_note_path ON financial_memories(note_path);
+CREATE INDEX IF NOT EXISTS idx_fin_entity_type ON financial_memories(entity_type);
+CREATE INDEX IF NOT EXISTS idx_fin_ticker ON financial_memories(ticker);

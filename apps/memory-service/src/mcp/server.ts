@@ -30,6 +30,7 @@ import { registerFinMemoryReadTool } from "./tools/fin-memory-read.js";
 import { registerFinMemorySearchTool } from "./tools/fin-memory-search.js";
 import { registerFinMemoryWriteTool } from "./tools/fin-memory-write.js";
 import { FinancialStore } from "../financial/financial-store.js";
+import { FinancialIndexStore } from "../financial/financial-index-store.js";
 
 export interface MemoryMcpServer {
   /** The McpServer instance — pass to `transport.ts` to wire HTTP. */
@@ -80,10 +81,11 @@ export function createMemoryMcpServer(
   const fileManager = new FileManager(config.KB_DATA_DIR);
   const kbIndexStore = new IndexStore(db);
   const financialStore = new FinancialStore(db);
+  const financialIndexStore = new FinancialIndexStore(db);
   const knowledgeStore = new KnowledgeStore({
     fileManager,
     indexStore: kbIndexStore,
-    financialStore,
+    financialIndexStore,
   });
 
   registerKbWriteTool(server, knowledgeStore);
