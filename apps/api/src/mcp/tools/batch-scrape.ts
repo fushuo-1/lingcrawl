@@ -93,10 +93,10 @@ export function registerBatchScrapeTool(server: McpServer) {
             mode: "single_urls" as const,
             team_id: "mcp",
             crawlerOptions: null,
-            scrapeOptions: {},
+            scrapeOptions: { formats: [{ type: "markdown" as const }] },
             origin: "mcp",
             crawl_id: id,
-            sitemapped: true,
+            sitemapped: false,  // 显式 URL 列表，不需要 sitemap 发现
             v1: true,
             internalOptions: sc.internalOptions,
             zeroDataRetention: false,
