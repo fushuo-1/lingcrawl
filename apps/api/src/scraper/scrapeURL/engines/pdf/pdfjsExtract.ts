@@ -7,6 +7,11 @@ import type {
   ExtractedImage,
   EnhancedPdfMetadata,
 } from "./types";
+import type { Logger } from "winston";
+import {
+  isVisionApiConfigured,
+  describeImagesBatch,
+} from "../../../../services/vision-api";
 
 /**
  * pdfjs-dist based PDF extraction with per-page text, table detection,
@@ -377,6 +382,7 @@ export async function extractWithPdfjs(
     includeTables?: boolean;
     includeImages?: boolean;
   },
+  logger?: Logger,
 ): Promise<PDFProcessorResult> {
   const pdfjs = await getPdfjs();
 
@@ -431,6 +437,21 @@ export async function extractWithPdfjs(
     }
   }
 
+  // Vision API: describe extracted images (if configured)
+  if (allImages.length > 0 && isVisionApiConfigured() && logger) {
+    logger.info(`pdfjsExtract: ${allImages.length} image(s) extracted, requesting Vision descriptions`);
+    const descriptions = await describeImagesBatch(
+      allImages.map((img) => ({ base64: img.data, contentType: "image/png" })),
+      logger,
+    );
+    for (let i = 0; i < allImages.length; i++) {
+      if (descriptions[i]) {
+        allImages[i].description = descriptions[i]!;
+      }
+    }
+    logger.info(`pdfjsExtract: described ${descriptions.filter(Boolean).length}/${allImages.length} image(s) via Vision API`);
+  }
+
   // Build markdown output
   let markdown = pageTexts.join("\n\n");
 
@@ -439,14 +460,16 @@ export async function extractWithPdfjs(
     markdown += "\n\n## Detected Tables\n\n" + tablesToMarkdown(allTables);
   }
 
-  // Append image info (not base64 data in markdown to keep it readable)
+  // Append image info with Vision descriptions (not base64 data in markdown to keep it readable)
   if (allImages.length > 0) {
     markdown +=
       "\n\n## Extracted Images\n\n" +
       allImages
         .map(
-          img =>
-            `- Page ${img.page}, Image ${img.index}: ${img.width}x${img.height} (${img.format})`,
+          img => {
+            const meta = `- Page ${img.page}, Image ${img.index} (${img.width}x${img.height}, ${img.format})`;
+            return img.description ? `${meta}\n  > 📷 ${img.description}` : meta;
+          },
         )
         .join("\n");
   }

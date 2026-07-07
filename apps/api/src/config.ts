@@ -84,8 +84,7 @@ const configSchema = z.object({
   PLAYWRIGHT_MICROSERVICE_URL: z.string().optional(),
   BLOCK_MEDIA: z.stringbool().optional(),
 
-  // Vision OCR
-  VISION_OCR_ENABLED: z.stringbool().optional(),
+  // Vision API（PDF 图片描述 + 网页图片 OCR）
   VISION_API_URL: z.string().optional(),
   VISION_API_KEY: z.string().optional(),
   VISION_MODEL: z.string().optional(),

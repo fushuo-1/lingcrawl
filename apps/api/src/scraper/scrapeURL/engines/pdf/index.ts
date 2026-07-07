@@ -85,7 +85,7 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
         maxPages,
         includeTables,
         includeImages,
-      });
+      }, meta.logger);
 
       return {
         url: targetUrl,
@@ -127,7 +127,7 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
         const mineruResult = await parseWithMinerU(tmpPath, {
           isOcr: true,
           pageRanges: pagesSpec,
-        });
+        }, meta.logger);
         const html = mineruResult.markdown
           ? await marked.parse(mineruResult.markdown, { async: true })
           : "";
@@ -138,6 +138,7 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
           markdown: mineruResult.markdown,
           pdfMetadata: { numPages: 0 },
           pdfTables: mineruResult.tables,
+          pdfImages: mineruResult.images,
           proxyUsed: "basic",
         };
       }
@@ -172,6 +173,7 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
         html: result?.html ?? "",
         markdown: result?.markdown,
         pdfMetadata: { numPages: 0 },
+        pdfImages: result?.images,
         proxyUsed: "basic",
       };
     } finally {
@@ -276,7 +278,7 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
       const mineruResult = await parseWithMinerU(tempFilePath, {
         isOcr: true,
         pageRanges: pagesSpec,
-      });
+      }, meta.logger);
       const html = mineruResult.markdown
         ? await marked.parse(mineruResult.markdown, { async: true })
         : "";
@@ -287,6 +289,7 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
         markdown: mineruResult.markdown,
         pdfMetadata: { numPages: 0 },
         pdfTables: mineruResult.tables,
+        pdfImages: mineruResult.images,
         proxyUsed: "basic",
       };
     }
@@ -354,11 +357,12 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
           const mineruResult = await parseWithMinerU(tempFilePath, {
             isOcr: true,
             pageRanges: pagesSpec,
-          });
+          }, logger);
           result = {
             html: "",
             markdown: mineruResult.markdown,
             tables: mineruResult.tables,
+            images: mineruResult.images,
           };
         } catch (mineruError) {
           if (
@@ -430,7 +434,7 @@ export async function scrapePDF(meta: Meta): Promise<EngineScrapeResult> {
         numPages: effectivePageCount,
         title: metadataTitle,
       },
-
+      pdfImages: result?.images,
       proxyUsed: "basic",
     };
   } finally {

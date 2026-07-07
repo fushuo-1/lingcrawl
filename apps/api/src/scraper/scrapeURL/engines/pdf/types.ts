@@ -28,6 +28,7 @@ export interface ExtractedImage {
   height: number;
   format: string;
   data: string; // base64
+  description?: string; // Vision 模型描述
 }
 
 export interface EnhancedPdfMetadata {

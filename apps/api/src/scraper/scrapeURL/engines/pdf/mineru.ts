@@ -3,7 +3,12 @@ import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
 import { config } from "../../../../config";
 import { MinerUError } from "../../../../lib/error";
-import type { ExtractedTable } from "./types";
+import type { ExtractedTable, ExtractedImage } from "./types";
+import {
+  isVisionApiConfigured,
+  describeImagesBatch,
+} from "../../../../services/vision-api";
+import type { Logger } from "winston";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -15,6 +20,7 @@ export interface MinerUParseOptions {
 export interface MinerUResult {
   markdown: string;
   tables: ExtractedTable[];
+  images?: ExtractedImage[];
 }
 
 export interface ContentListItem {
@@ -30,6 +36,7 @@ export interface ContentListItem {
 export async function parseWithMinerU(
   filePath: string,
   options: MinerUParseOptions,
+  logger?: Logger,
 ): Promise<MinerUResult> {
   const {
     MINERU_API_TOKEN,
@@ -152,6 +159,7 @@ export async function parseWithMinerU(
   // 5. Extract full.md
   let markdown = "";
   const tables: ExtractedTable[] = [];
+  const images: ExtractedImage[] = [];
 
   const mdFile = zip.file(/full\.md$/i)[0];
   if (mdFile) {
@@ -160,13 +168,71 @@ export async function parseWithMinerU(
 
   // 6. Extract content_list JSON
   const contentListFiles = zip.file(/_content_list\.json$/i);
+  let contentList: ContentListItem[] = [];
   if (contentListFiles.length > 0) {
     const raw = await contentListFiles[0].async("text");
-    const contentList: ContentListItem[] = JSON.parse(raw);
+    contentList = JSON.parse(raw);
     tables.push(...mapContentListToTables(contentList));
   }
 
-  return { markdown, tables };
+  // 7. Extract images from zip and call Vision API for descriptions
+  if (isVisionApiConfigured() && contentList.length > 0 && logger) {
+    const imageEntries = mapContentListToImages(contentList);
+    if (imageEntries.length > 0) {
+      logger.info(`MinerU: found ${imageEntries.length} image(s), requesting Vision descriptions`);
+
+      // Read image files from zip as base64
+      const imageDataList: Array<{ base64: string; contentType: string; imgPath: string; page: number }> = [];
+      for (const entry of imageEntries) {
+        const imgFile = zip.file(entry.imgPath);
+        if (!imgFile) continue;
+        const buffer = await imgFile.async("nodebuffer");
+        // Skip very large images (>5MB)
+        if (buffer.length > 5 * 1024 * 1024) continue;
+        const ext = path.extname(entry.imgPath).toLowerCase();
+        const contentType = ext === ".png" ? "image/png" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png";
+        imageDataList.push({ base64: buffer.toString("base64"), contentType, imgPath: entry.imgPath, page: entry.page });
+      }
+
+      if (imageDataList.length > 0) {
+        const descriptions = await describeImagesBatch(
+          imageDataList.map((d) => ({ base64: d.base64, contentType: d.contentType })),
+          logger,
+        );
+
+        // Append descriptions to markdown and build ExtractedImage list
+        for (let i = 0; i < imageDataList.length; i++) {
+          const data = imageDataList[i];
+          const desc = descriptions[i];
+
+          images.push({
+            page: data.page,
+            index: i,
+            width: 0,
+            height: 0,
+            format: data.contentType.split("/")[1] || "png",
+            data: data.base64,
+            description: desc || undefined,
+          });
+
+          // Append description under the image reference in markdown
+          if (desc && markdown) {
+            // Match image references like ![](images/xxx.png) or ![alt](path)
+            const imgFilename = path.basename(data.imgPath);
+            const imgRefRegex = new RegExp(
+              `(!\\[[^\\]]*\\]\\([^)]*${escapeRegExp(imgFilename)}[^)]*\\))`,
+              "g",
+            );
+            markdown = markdown.replace(imgRefRegex, `$1\n> 📷 ${desc}`);
+          }
+        }
+
+        logger.info(`MinerU: described ${descriptions.filter(Boolean).length}/${imageDataList.length} image(s) via Vision API`);
+      }
+    }
+  }
+
+  return { markdown, tables, images: images.length > 0 ? images : undefined };
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -264,6 +330,24 @@ export function mapContentListToTables(
   }
 
   return tables;
+}
+
+export function mapContentListToImages(
+  contentList: ContentListItem[],
+): Array<{ imgPath: string; page: number }> {
+  const images: Array<{ imgPath: string; page: number }> = [];
+
+  for (const item of contentList) {
+    if (item.type !== "image") continue;
+    if (!item.img_path) continue;
+    images.push({ imgPath: item.img_path, page: 0 });
+  }
+
+  return images;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function parseHtmlTable(html: string): {

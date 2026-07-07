@@ -1,15 +1,18 @@
-import { config } from "../../../config";
 import { Logger } from "winston";
+import {
+  isVisionApiConfigured,
+  describeImageBase64,
+} from "../../../services/vision-api";
 
 /**
  * Replace image URLs in Markdown with text descriptions from a vision model.
- * Only runs when VISION_OCR_ENABLED is true and a vision API is configured.
+ * Only runs when VISION_API_URL and VISION_API_KEY are configured.
  */
 export async function visionOcrMarkdown(
   markdown: string,
   logger: Logger,
 ): Promise<string> {
-  if (!config.VISION_OCR_ENABLED || !config.VISION_API_URL || !config.VISION_API_KEY) {
+  if (!isVisionApiConfigured()) {
     return markdown;
   }
 
@@ -59,76 +62,18 @@ export async function visionOcrMarkdown(
 }
 
 /**
- * Call vision model API to describe an image.
- * Uses Anthropic Messages API format.
+ * 下载 URL 图片并调 Vision API 描述。
  */
 async function describeImage(
   imageUrl: string,
   logger: Logger,
 ): Promise<string | null> {
   try {
-    // Download image and convert to base64
     const imageData = await downloadImageAsBase64(imageUrl);
     if (!imageData) return null;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.VISION_OCR_TIMEOUT);
-
-    try {
-      const response = await fetch(`${config.VISION_API_URL}/v1/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": config.VISION_API_KEY!,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: config.VISION_MODEL || "claude-sonnet-4-6",
-          max_tokens: 512,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image",
-                  source: {
-                    type: "base64",
-                    media_type: imageData.contentType,
-                    data: imageData.base64,
-                  },
-                },
-                {
-                  type: "text",
-                  text: config.VISION_OCR_PROMPT,
-                },
-              ],
-            },
-          ],
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        logger.warn(`Vision OCR API error: ${response.status} ${errText.slice(0, 200)}`);
-        return null;
-      }
-
-      const result = (await response.json()) as {
-        content?: { type: string; text: string }[];
-      };
-
-      const text = result.content?.find(c => c.type === "text")?.text;
-      return text?.trim() || null;
-    } finally {
-      clearTimeout(timeout);
-    }
+    return describeImageBase64(imageData.base64, imageData.contentType, logger);
   } catch (err) {
-    if ((err as Error).name === "AbortError") {
-      logger.warn(`Vision OCR timeout for image: ${imageUrl.slice(0, 100)}`);
-    } else {
-      logger.warn(`Vision OCR error for image: ${(err as Error).message?.slice(0, 200)}`);
-    }
+    logger.warn(`Vision OCR error for image: ${(err as Error).message?.slice(0, 200)}`);
     return null;
   }
 }

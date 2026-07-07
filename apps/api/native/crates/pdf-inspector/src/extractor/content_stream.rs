@@ -105,9 +105,7 @@ pub(crate) fn extract_page_text_items(
     let xobjects = get_page_xobjects(doc, page_id);
 
     // Get content
-    let content_data = doc
-        .get_page_content(page_id)
-        .map_err(|e| PdfError::Parse(e.to_string()))?;
+    let content_data = doc.get_page_content(page_id);
 
     let content = Content::decode(&content_data).map_err(|e| PdfError::Parse(e.to_string()))?;
 
