@@ -30,5 +30,24 @@ export function readSchema(): string {
  * uses `IF NOT EXISTS`.
  */
 export function applySchema(db: Database.Database): void {
+  // Check if notes_fts needs tokenizer migration (unicode61 → trigram)
+  const ftsRow = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='notes_fts'",
+  ).get() as { sql: string } | undefined;
+
+  const needsMigration = ftsRow && !ftsRow.sql.includes("trigram");
+  if (needsMigration) {
+    // Drop old unicode61 FTS table and its triggers before recreating
+    db.exec("DROP TRIGGER IF EXISTS notes_ai");
+    db.exec("DROP TRIGGER IF EXISTS notes_ad");
+    db.exec("DROP TRIGGER IF EXISTS notes_au");
+    db.exec("DROP TABLE IF EXISTS notes_fts");
+  }
+
   db.exec(readSchema());
+
+  // Rebuild FTS index after tokenizer migration
+  if (needsMigration) {
+    db.exec("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')");
+  }
 }

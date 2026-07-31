@@ -18,8 +18,16 @@ export interface ParsedNote {
 
 const FM_DELIMITER = "---";
 
-function nowISO(): string {
-  return new Date().toISOString();
+export function nowISO(): string {
+  // 北京时间 (UTC+8)
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}+08:00`;
 }
 
 /**

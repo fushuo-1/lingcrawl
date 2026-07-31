@@ -3,6 +3,7 @@
  *
  * scan:    扫描所有金融记忆的过时状态，返回 summary + details
  * archive: 对指定路径执行 Stage 1（软归档）或 Stage 2（硬归档）
+ * cleanup: 清理孤立的金融索引记录（path 为 null 或指向不存在的笔记）
  */
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -51,11 +52,14 @@ export function registerKbStalenessTool(
     "Scan and archive stale financial memories. " +
       "Use action='scan' to get a staleness report; " +
       "use action='archive' with paths to soft-archive (stale → mark stale: true) " +
-      "or hard-archive (archived → move to _archived/YYYY-MM/).",
+      "or hard-archive (archived → move to _archived/YYYY-MM/); " +
+      "use action='cleanup' to remove orphaned financial index records.",
     {
       action: z
-        .enum(["scan", "archive"])
-        .describe("scan: 返回所有金融记忆的过时状态; archive: 对指定路径执行归档。"),
+        .enum(["scan", "archive", "cleanup"])
+        .describe(
+          "scan: 返回所有金融记忆的过时状态; archive: 对指定路径执行归档; cleanup: 清理孤立索引记录。",
+        ),
       paths: z
         .array(z.string())
         .optional()
@@ -67,6 +71,9 @@ export function registerKbStalenessTool(
       try {
         if (action === "scan") {
           return handleScan(financialIndexStore);
+        }
+        if (action === "cleanup") {
+          return handleCleanup(financialIndexStore);
         }
         return handleArchive(knowledgeStore, financialIndexStore, paths);
       } catch (err) {
@@ -110,6 +117,31 @@ function handleScan(financialIndexStore: FinancialIndexStore) {
               stage: i.stage,
             })),
             summary,
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  cleanup 逻辑                                                        */
+/* ------------------------------------------------------------------ */
+
+function handleCleanup(financialIndexStore: FinancialIndexStore) {
+  const removed = financialIndexStore.cleanupOrphans();
+
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: JSON.stringify(
+          {
+            success: true,
+            removed,
+            message: `已清理 ${removed} 条孤立的金融索引记录`,
           },
           null,
           2,

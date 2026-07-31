@@ -14,6 +14,7 @@ import {
   type Frontmatter,
   parse as parseFrontmatter,
   serialize as serializeFrontmatter,
+  nowISO,
 } from "./frontmatter.js";
 import { resolvePath } from "./path-resolver.js";
 import { EmptyContentError, NoteNotFoundError } from "./errors.js";
@@ -116,7 +117,7 @@ export class KnowledgeStore {
 
     // 7. Serialize final markdown — preserve original created timestamp when overwriting.
     //    Also detect stale/archived flags so they are cleared on overwrite (#118).
-    const now = new Date().toISOString();
+    const now = nowISO();
     let originalCreated: string | undefined;
     let wasStale = false;
     if (overwrite && this.fileManager.exists(notePath)) {

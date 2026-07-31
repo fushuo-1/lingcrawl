@@ -79,10 +79,11 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 CREATE INDEX IF NOT EXISTS idx_notes_path ON notes(path);
 
--- FTS5 virtual table for notes full-text search
+-- FTS5 virtual table for notes full-text search (trigram tokenizer for CJK support)
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   title, content,
-  content='notes', content_rowid='id'
+  content='notes', content_rowid='id',
+  tokenize='trigram'
 );
 
 -- Triggers that keep notes_fts in sync with notes

@@ -115,43 +115,75 @@ export class IndexStore {
     filters?: { tags?: string[]; pathPrefix?: string; limit?: number; excludeArchived?: boolean },
   ): SearchHit[] {
     const limit = filters?.limit ?? 50;
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    const terms = query.trim().split(/\s+/).filter(Boolean);
+    const hasShortTerm = terms.some((t) => t.length < 3);
 
-    // FTS query
-    conditions.push("notes_fts MATCH ?");
-    params.push(query);
+    // Escape FTS5 syntax characters (hyphen, colon, etc.) by quoting terms that contain them
+    const ftsQuery = terms
+      .map((t) => (/[":\-]/.test(t) ? `"${t}"` : t))
+      .join(" ");
 
-    // Optional filters
+    // Build filter conditions (shared by both FTS and LIKE paths)
+    const filterConditions: string[] = [];
+    const filterParams: unknown[] = [];
+
     if (filters?.pathPrefix) {
-      conditions.push("n.path LIKE ?");
-      params.push(`${filters.pathPrefix}%`);
+      filterConditions.push("n.path LIKE ?");
+      filterParams.push(`${filters.pathPrefix}%`);
     }
     if (filters?.tags?.length) {
-      // JSON array contains any of the requested tags
-      const tagConds = filters.tags.map((t) => `n.tags LIKE ?`);
-      conditions.push(`(${tagConds.join(" OR ")})`);
+      const tagConds = filters.tags.map(() => `n.tags LIKE ?`);
+      filterConditions.push(`(${tagConds.join(" OR ")})`);
       for (const t of filters.tags) {
-        params.push(`%"${t}"%`);
+        filterParams.push(`%"${t}"%`);
       }
     }
-    // 排除 _archived/ 路径下的笔记
     if (filters?.excludeArchived) {
-      conditions.push("n.path NOT LIKE '%/_archived/%'");
+      filterConditions.push("n.path NOT LIKE '%/_archived/%'");
     }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    let sql: string;
+    let params: unknown[];
 
-    const sql = `
-      SELECT n.*, snippet(notes_fts, 1, '<b>', '</b>', '…', 32) AS snippet,
-             rank AS score
-      FROM notes_fts
-      JOIN notes n ON n.id = notes_fts.rowid
-      ${where}
-      ORDER BY rank
-      LIMIT ?
-    `;
-    params.push(limit);
+    if (hasShortTerm) {
+      // LIKE fallback: trigram tokenizer requires ≥3 chars per term.
+      // For each term, match against title + content with LIKE.
+      const termConditions = terms.map(
+        () => `(n.title LIKE ? OR n.content LIKE ?)`,
+      );
+      const allConditions = [...termConditions, ...filterConditions];
+      const where =
+        allConditions.length > 0
+          ? `WHERE ${allConditions.join(" AND ")}`
+          : "";
+
+      sql = `
+        SELECT n.*, '' AS snippet, 0 AS score
+        FROM notes n
+        ${where}
+        LIMIT ?
+      `;
+      params = [
+        ...terms.flatMap((t) => [`%${t}%`, `%${t}%`]),
+        ...filterParams,
+        limit,
+      ];
+    } else {
+      // FTS5 trigram path: all terms ≥ 3 chars, use MATCH for full-text search
+      const conditions = ["notes_fts MATCH ?", ...filterConditions];
+      const where = `WHERE ${conditions.join(" AND ")}`;
+
+      sql = `
+        SELECT n.*, snippet(notes_fts, 1, '<b>', '</b>', '…', 32) AS snippet,
+               rank AS score
+        FROM notes_fts
+        JOIN notes n ON n.id = notes_fts.rowid
+        ${where}
+        ORDER BY rank
+        LIMIT ?
+      `;
+      params = [ftsQuery, ...filterParams, limit];
+    }
 
     const rows = this.db.prepare(sql).all(...params) as Record<string, unknown>[];
     return rows.map((row) => ({

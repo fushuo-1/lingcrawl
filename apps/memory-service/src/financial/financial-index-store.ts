@@ -318,4 +318,30 @@ export class FinancialIndexStore {
         return b.daysStale - a.daysStale;
       });
   }
+
+  /* ---- Cleanup orphan records ---- */
+
+  /**
+   * 清理孤立的金融记忆记录：
+   * 1. note_path 为 null 的记录
+   * 2. note_path 在 notes 表中不存在的记录
+   *
+   * @returns 删除的记录数
+   */
+  cleanupOrphans(): number {
+    // 删除 note_path 为 null 的记录
+    const nullPathResult = this.db
+      .prepare("DELETE FROM financial_memories WHERE note_path IS NULL")
+      .run();
+
+    // 删除 note_path 在 notes 表中不存在的记录（外键孤立）
+    const orphanResult = this.db
+      .prepare(
+        `DELETE FROM financial_memories
+         WHERE note_path NOT IN (SELECT path FROM notes)`,
+      )
+      .run();
+
+    return nullPathResult.changes + orphanResult.changes;
+  }
 }
